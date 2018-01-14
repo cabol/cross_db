@@ -1,0 +1,15 @@
+{application, cross_db, [
+  {description, "Simple and flexible database wrapper for Erlang"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {xdb, []}},
+  {applications, [
+    kernel,
+    stdlib
+  ]},
+  {env,[]},
+  {modules, []},
+  {maintainers, ["Carlos A. Bolanos"]},
+  {licenses, ["MIT"]},
+  {links, []}
+]}.

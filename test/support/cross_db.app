@@ -1,0 +1,1 @@
+{application, cross_db, []}.

@@ -1,0 +1,14 @@
+{application, blog, [
+  {description, "Blog example"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {blog_app, []}},
+  {applications, [
+    kernel,
+    stdlib
+  ]},
+  {env,[]},
+  {modules, []},
+  {maintainers, []},
+  {links, []}
+]}.
