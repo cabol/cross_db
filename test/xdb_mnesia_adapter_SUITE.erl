@@ -31,7 +31,9 @@
     t_get/1,
     t_get_by/1,
     t_all/1,
-    t_all_with_pagination/1
+    t_all_with_pagination/1,
+    t_delete_all/1,
+    t_delete_all_with_conditions/1
   ]}
 ]).
 

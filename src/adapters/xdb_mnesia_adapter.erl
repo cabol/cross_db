@@ -2,9 +2,8 @@
 %%% @doc
 %%% Mnesia adapter.
 %%%
-%%% Based on SumoDB `sumo_store_mnesia`
+%%% Based on SumoDB mnesia adapter `sumo_store_mnesia`
 %%% @copyright 2012 Inaka &lt;hello@inaka.net&gt;
-%%% @author Brujo Benavides <elbrujohalcon@inaka.net>
 %%% @reference See
 %%% <a href="https://github.com/inaka/sumo_db">SumoDB</a>
 %%% @end
@@ -18,7 +17,7 @@
   insert/4,
   update/5,
   delete/4,
-  all/4
+  execute/5
 ]).
 
 %%%===================================================================
@@ -27,18 +26,18 @@
 
 %% @hidden
 insert(_Repo, #{schema := Schema, source := Source}, Fields, Opts) ->
-  {_, PKs, FieldNames} = get_meta(Schema),
+  {PKs, FieldNames} = get_meta(Schema),
   OnConflict = xdb_lib:keyfind(on_conflict, Opts, raise),
   do_insert(Source, PKs, FieldNames, Fields, OnConflict).
 
 %% @hidden
 update(_Repo, #{schema := Schema, source := Source}, Fields, Filters, _Opts) ->
-  {_, PKs, FieldNames} = get_meta(Schema),
+  {PKs, FieldNames} = get_meta(Schema),
   do_update(Source, PKs, FieldNames, Fields, Filters).
 
 %% @hidden
 delete(_Repo, #{schema := Schema, source := Source}, Filters, _Opts) ->
-  {_SchemaSpec, PKs, FieldNames} = get_meta(Schema),
+  {PKs, FieldNames} = get_meta(Schema),
   {true, PkValues} = xdb_query:pk_filter(PKs, Filters),
 
   case do_delete(Source, PkValues) of
@@ -49,22 +48,8 @@ delete(_Repo, #{schema := Schema, source := Source}, Filters, _Opts) ->
   end.
 
 %% @hidden
-all(_Repo, #{schema := Schema, source := Source}, #{q_body := {raw, MatchSpec}}, Opts) ->
-  {_SchemaSpec, PKs, FieldNames} = get_meta(Schema),
-  Records = do_select(Source, MatchSpec, Opts),
-  {length(Records), to_fields(PKs, FieldNames, Records)};
-all(_Repo, #{schema := Schema, source := Source}, #{q_body := Conditions}, Opts) ->
-  {_SchemaSpec, PKs, FieldNames} = get_meta(Schema),
-
-  Records =
-    case xdb_query:pk_filter(PKs, Conditions) of
-      {true, PkValues} ->
-        do_get(Source, PkValues);
-      _ ->
-        do_select(Source, FieldNames, Conditions, Opts)
-    end,
-
-  {length(Records), to_fields(PKs, FieldNames, Records)}.
+execute(_Repo, Op, #{schema := Schema, source := Source}, #{q_body := Query}, Opts) ->
+  do_execute(Op, Schema, Source, Query, Opts).
 
 %%%===================================================================
 %%% Internal functions
@@ -75,7 +60,7 @@ get_meta(Schema) ->
   SchemaSpec = Schema:schema_spec(),
   PKFieldNames = xdb_schema_spec:pk_field_names(SchemaSpec),
   FieldNames = xdb_schema_spec:field_names(SchemaSpec),
-  {SchemaSpec, PKFieldNames, FieldNames}.
+  {PKFieldNames, FieldNames}.
 
 %% @private
 pk(Values) ->
@@ -174,18 +159,55 @@ do_delete(Source, PkValues) ->
   end).
 
 %% @private
-do_get(Source, PkValues) ->
-  exec_transaction(fun() ->
-    mnesia:read({Source, pk(xdb_lib:kv_values(PkValues))})
-  end).
-
-%% @private
-do_select(Source, FieldNames, Conditions, Opts) ->
+do_execute(Op, Schema, Source, {raw, MatchSpec}, Opts) ->
+  {PKs, FieldNames} = get_meta(Schema),
+  do_execute(Op, Source, PKs, FieldNames, MatchSpec, Opts);
+do_execute(all, Schema, Source, Conditions, Opts) ->
+  {PKs, FieldNames} = get_meta(Schema),
+  case xdb_query:pk_filter(PKs, Conditions) of
+    {true, PkValues} ->
+      do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}, Opts);
+    _ ->
+      MatchSpec = build_match_spec(Source, FieldNames, Conditions),
+      do_execute(all, Source, PKs, FieldNames, MatchSpec, Opts)
+  end;
+do_execute(delete_all, _Schema, Source, [], Opts) ->
+  do_execute(delete_all, Source, undefined, undefined, all, Opts);
+do_execute(Op, Schema, Source, Conditions, Opts) ->
+  {PKs, FieldNames} = get_meta(Schema),
   MatchSpec = build_match_spec(Source, FieldNames, Conditions),
-  do_select(Source, MatchSpec, Opts).
+  do_execute(Op, Source, PKs, FieldNames, MatchSpec, Opts).
 
-%% @private
-do_select(Source, MatchSpec, Opts) ->
+do_execute(delete_all, Source, _PKs, _FieldNames, all, _Opts) ->
+  Count = mnesia:table_info(Source, size),
+  case mnesia:clear_table(Source) of
+    {atomic, ok} ->
+      {Count, undefined};
+    {aborted, Reason} ->
+      xdb_lib:raise(Reason)
+  end;
+
+do_execute(delete_all, Source, PKs, FieldNames, MatchSpec, _Opts) ->
+  Transaction =
+    fun() ->
+      Records = mnesia:select(Source, MatchSpec),
+      ok = lists:foreach(fun mnesia:delete_object/1, Records),
+      Records
+    end,
+
+  Records = exec_transaction(Transaction),
+  {length(Records), to_fields(PKs, FieldNames, Records)};
+
+do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}, _Opts) ->
+  GetTx =
+    fun() ->
+       mnesia:read({Source, pk(xdb_lib:kv_values(PkValues))})
+    end,
+
+  Records = exec_transaction(GetTx),
+  {length(Records), to_fields(PKs, FieldNames, Records)};
+
+do_execute(all, Source, PKs, FieldNames, MatchSpec, Opts) ->
   Limit = xdb_lib:keyfind(limit, Opts, 0),
   Offset = xdb_lib:keyfind(offset, Opts, 0),
 
@@ -206,13 +228,14 @@ do_select(Source, MatchSpec, Opts) ->
       end
     end,
 
-  SelectTx =
+  Transaction =
     case Limit of
       0 -> SelectAll;
       _ -> SelectBy
     end,
 
-  exec_transaction(SelectTx).
+  Records = exec_transaction(Transaction),
+  {length(Records), to_fields(PKs, FieldNames, Records)}.
 
 %% @private
 process_records(Source, Records, Limit, Offset) ->

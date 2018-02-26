@@ -219,18 +219,20 @@ build_repo(Opts) ->
   Adapter = get_value(adapter, Opts),
 
   RepoFunSpecs = [
-    {xdb_repo_schema,    insert, 1},
-    {xdb_repo_schema,    insert, 2},
-    {xdb_repo_schema,    update, 1},
-    {xdb_repo_schema,    update, 2},
-    {xdb_repo_schema,    delete, 1},
-    {xdb_repo_schema,    delete, 2},
-    {xdb_repo_queryable, all,    1},
-    {xdb_repo_queryable, all,    2},
-    {xdb_repo_queryable, get,    2},
-    {xdb_repo_queryable, get,    3},
-    {xdb_repo_queryable, get_by, 2},
-    {xdb_repo_queryable, get_by, 3}
+    {xdb_repo_schema,    insert,     1},
+    {xdb_repo_schema,    insert,     2},
+    {xdb_repo_schema,    update,     1},
+    {xdb_repo_schema,    update,     2},
+    {xdb_repo_schema,    delete,     1},
+    {xdb_repo_schema,    delete,     2},
+    {xdb_repo_queryable, all,        1},
+    {xdb_repo_queryable, all,        2},
+    {xdb_repo_queryable, get,        2},
+    {xdb_repo_queryable, get,        3},
+    {xdb_repo_queryable, get_by,     2},
+    {xdb_repo_queryable, get_by,     3},
+    {xdb_repo_queryable, delete_all, 1},
+    {xdb_repo_queryable, delete_all, 2}
   ],
 
   RepoFuns = [

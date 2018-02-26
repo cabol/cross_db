@@ -40,6 +40,11 @@
   Opts :: xdb_lib:keyword(),
   Res  :: w_respose().
 
+-callback delete_all(Queryable, Opts) -> Res when
+  Queryable :: xdb_query:t() | xdb_query:queryable(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: {integer(), [any()] | undefined} | no_return().
+
 -callback get(Queryable, Id, Opts) -> Res when
   Queryable :: xdb_query:queryable(),
   Id        :: any(),

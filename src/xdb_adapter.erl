@@ -18,6 +18,8 @@
 
 -type constraints() :: xdb_lib:keyword().
 
+-type exec_op() :: all | delete_all | update_all.
+
 -type r_response() :: {Count :: integer(), [xdb_schema:fields()] | undefined}
                     | no_return().
 
@@ -28,6 +30,7 @@
 -export_type([
   t/0,
   schema_meta/0,
+  exec_op/0,
   constraints/0
 ]).
 
@@ -44,19 +47,20 @@
   Opts :: xdb_lib:keyword(),
   Res  :: supervisor:child_spec().
 
--callback all(Repo, QueryMeta, Query, Opts) -> Res when
-  Repo      :: xdb_repo:t(),
-  QueryMeta :: schema_meta(),
-  Query     :: xdb_query:t(),
-  Opts      :: xdb_lib:keyword(),
-  Res       :: r_response().
-
 -callback delete(Repo, SchemaMeta, Filters, Opts) -> Res when
   Repo       :: xdb_repo:t(),
   SchemaMeta :: schema_meta(),
   Filters    :: xdb_lib:keyword(),
   Opts       :: xdb_lib:keyword(),
   Res        :: w_response() | {error, stale}.
+
+-callback execute(Repo, Operation, QueryMeta, Query, Opts) -> Res when
+  Repo      :: xdb_repo:t(),
+  Operation :: exec_op(),
+  QueryMeta :: schema_meta(),
+  Query     :: xdb_query:t(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: r_response().
 
 -callback insert(Repo, SchemaMeta, Fields, Opts) -> Res when
   Repo       :: xdb_repo:t(),

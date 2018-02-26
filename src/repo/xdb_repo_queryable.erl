@@ -12,7 +12,9 @@
   get/4,
   get/5,
   get_by/4,
-  get_by/5
+  get_by/5,
+  delete_all/3,
+  delete_all/4
 ]).
 
 %%%===================================================================
@@ -29,12 +31,8 @@ all(Repo, Adapter, Queryable) ->
   Queryable :: xdb_query:t() | xdb_query:queryable(),
   Opts      :: xdb_lib:keyword(),
   Res       :: [xdb_schema:t()] | no_return().
-all(Repo, Adapter, Queryable, Opts) when is_atom(Queryable) ->
-  Query = xdb_query:new(Queryable),
-  all(Repo, Adapter, Query, Opts);
-all(Repo, Adapter, #{schema := Schema} = Queryable, Opts) ->
-  FieldsLst = element(2, Adapter:all(Repo, get_metadata(Queryable), Queryable, Opts)),
-  [Schema:schema(Fields) || Fields <- FieldsLst].
+all(Repo, Adapter, Queryable, Opts) ->
+  execute(all, Repo, Adapter, Queryable, Opts).
 
 %% @equiv get(Repo, Adapter, Queryable, Id, [])
 get(Repo, Adapter, Queryable, Id) ->
@@ -65,9 +63,37 @@ get_by(Repo, Adapter, Queryable, Clauses) ->
 get_by(Repo, Adapter, Queryable, Clauses, Opts) when is_atom(Queryable) ->
   one(Repo, Adapter, Queryable, Clauses, Opts).
 
+%% @equiv delete_all(Repo, Adapter, Queryable, [])
+delete_all(Repo, Adapter, Queryable) ->
+  delete_all(Repo, Adapter, Queryable, []).
+
+-spec delete_all(Repo, Adapter, Queryable, Opts) -> Res when
+  Repo      :: xdb_repo:t(),
+  Adapter   :: xdb_adapter:t(),
+  Queryable :: xdb_query:t() | xdb_query:queryable(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: {integer(), [any()]} | no_return().
+delete_all(Repo, Adapter, Queryable, Opts) ->
+  execute(delete_all, Repo, Adapter, Queryable, Opts).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%% @private
+execute(Op, Repo, Adapter, Queryable, Opts) when is_atom(Queryable) ->
+  Query = xdb_query:new(Queryable),
+  execute(Op, Repo, Adapter, Query, Opts);
+execute(all, Repo, Adapter, #{schema := Schema} = Queryable, Opts) ->
+  Result = Adapter:execute(Repo, all, get_metadata(Queryable), Queryable, Opts),
+  [Schema:schema(Fields) || Fields <- element(2, Result)];
+execute(delete_all, Repo, Adapter, #{schema := Schema} = Queryable, Opts) ->
+  case Adapter:execute(Repo, delete_all, get_metadata(Queryable), Queryable, Opts) of
+    {Count, ResL} when is_list(ResL) ->
+      {Count, [Schema:schema(Fields) || Fields <- ResL]};
+    {_, undefined} = Res ->
+      Res
+  end.
 
 %% @private
 one(Repo, Adapter, Queryable, Clauses, Opts) ->

@@ -4,7 +4,6 @@
 %%%
 %%% Based on SumoDB `sumo_sql_builder`.
 %%% @copyright 2012 Inaka &lt;hello@inaka.net&gt;
-%%% @author Marcelo Gornstein <marcelog@gmail.com>
 %%% @reference See
 %%% <a href="https://github.com/inaka/sumo_db">SumoDB</a>
 %%% @end

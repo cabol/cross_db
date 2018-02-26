@@ -16,7 +16,9 @@
   t_get/1,
   t_get_by/1,
   t_all/1,
-  t_all_with_pagination/1
+  t_all_with_pagination/1,
+  t_delete_all/1,
+  t_delete_all_with_conditions/1
 ]).
 
 %% Helpers
@@ -196,7 +198,8 @@ t_all(Config) ->
     1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Turing">>},
     2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
     3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
-  } = person:list_to_map(Repo:all(person)),
+  } = All = person:list_to_map(Repo:all(person)),
+  3 = maps:size(All),
   ok.
 
 -spec t_all_with_pagination(xdb_ct:config()) -> ok.
@@ -222,7 +225,51 @@ t_all_with_pagination(Config) ->
   #{
     1 := #{first_name := <<"Alan">>, last_name := <<"Turing">>},
     2 := #{first_name := <<"Charles">>, last_name := <<"Darwin">>}
-  } = person:list_to_map(Repo:all(Query2, [{limit, 10}, {offset, 0}])),
+  } = All = person:list_to_map(Repo:all(Query2, [{limit, 10}, {offset, 0}])),
+  2 = maps:size(All),
+  ok.
+
+-spec t_delete_all(xdb_ct:config()) -> ok.
+t_delete_all(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  [] = Repo:all(person),
+  ok = seed(Config),
+
+  #{
+    1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Turing">>},
+    2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
+    3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
+  } = All = person:list_to_map(Repo:all(person)),
+  3 = maps:size(All),
+
+  {3, undefined} = Repo:delete_all(person),
+  [] = Repo:all(person),
+
+  ok = assert_error(fun() -> Repo:delete_all(account) end, {no_exists, account}).
+
+-spec t_delete_all_with_conditions(xdb_ct:config()) -> ok.
+t_delete_all_with_conditions(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  [] = Repo:all(person),
+  ok = seed(Config),
+
+  #{
+    1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Turing">>},
+    2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
+    3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
+  } = All1 = person:list_to_map(Repo:all(person)),
+  3 = maps:size(All1),
+
+  Query1 = xdb_query:new(person, [{'and', [{first_name, <<"Alan">>}, {age, '>', 40}]}]),
+  {1, [_]} = Repo:delete_all(Query1),
+
+  #{
+    2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
+    3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
+  } = All2 = person:list_to_map(Repo:all(person)),
+  2 = maps:size(All2),
   ok.
 
 %%%===================================================================

@@ -6,7 +6,7 @@
   insert/4,
   update/5,
   delete/4,
-  all/4
+  execute/5
 ]).
 
 %%%===================================================================
@@ -37,11 +37,11 @@ delete(_Repo, _Meta, _Filters, _Opts) ->
   {ok, Values}.
 
 %% @hidden
-all(_Repo, _Meta, #{q_body := [{_, -1}]}, _Opts) ->
+execute(_Repo, _Op, _Meta, #{q_body := [{_, -1}]}, _Opts) ->
   {2, []};
-all(_Repo, _Meta, #{q_body := [{_, -11}]}, _Opts) ->
+execute(_Repo, _Op, _Meta, #{q_body := [{_, -11}]}, _Opts) ->
   {2, [person:schema(#{id => 1}), person:schema(#{id => 2})]};
-all(_Repo, _Meta, #{q_body := [{PK, Id}]}, _Opts) ->
+execute(_Repo, _Op, _Meta, #{q_body := [{PK, Id}]}, _Opts) ->
   {1, [person:schema(#{PK => Id})]};
-all(_Repo, _Meta, _Query, _Opts) ->
+execute(_Repo, _Op, _Meta, _Query, _Opts) ->
   {1, [person:schema(#{id => 1})]}.
