@@ -66,3 +66,9 @@
   Changeset :: xdb_changeset:t(),
   Opts      :: xdb_lib:keyword(),
   Res       :: w_respose().
+
+-callback update_all(Queryable, Updates, Opts) -> Res when
+  Queryable :: xdb_query:t() | xdb_query:queryable(),
+  Updates   :: xdb_lib:keyword(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: {integer(), [any()] | undefined} | no_return().

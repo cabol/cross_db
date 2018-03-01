@@ -48,8 +48,8 @@ delete(_Repo, #{schema := Schema, source := Source}, Filters, _Opts) ->
   end.
 
 %% @hidden
-execute(_Repo, Op, #{schema := Schema, source := Source}, #{q_body := Query}, Opts) ->
-  do_execute(Op, Schema, Source, Query, Opts).
+execute(_Repo, Op, #{schema := Schema, source := Source}, Query, _Opts) ->
+  do_execute(Op, Schema, Source, Query).
 
 %%%===================================================================
 %%% Internal functions
@@ -159,26 +159,26 @@ do_delete(Source, PkValues) ->
   end).
 
 %% @private
-do_execute(Op, Schema, Source, {raw, MatchSpec}, Opts) ->
+do_execute(Op, Schema, Source, #{raw := MatchSpec, limit := Limit, offset := Offset}) ->
   {PKs, FieldNames} = get_meta(Schema),
-  do_execute(Op, Source, PKs, FieldNames, MatchSpec, Opts);
-do_execute(all, Schema, Source, Conditions, Opts) ->
+  do_execute(Op, Source, PKs, FieldNames, {MatchSpec, Limit, Offset});
+do_execute(all, Schema, Source, #{where := Conditions, limit := Limit, offset := Offset}) ->
   {PKs, FieldNames} = get_meta(Schema),
   case xdb_query:pk_filter(PKs, Conditions) of
     {true, PkValues} ->
-      do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}, Opts);
+      do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues});
     _ ->
       MatchSpec = build_match_spec(Source, FieldNames, Conditions),
-      do_execute(all, Source, PKs, FieldNames, MatchSpec, Opts)
+      do_execute(all, Source, PKs, FieldNames, {MatchSpec, Limit, Offset})
   end;
-do_execute(delete_all, _Schema, Source, [], Opts) ->
-  do_execute(delete_all, Source, undefined, undefined, all, Opts);
-do_execute(Op, Schema, Source, Conditions, Opts) ->
+do_execute(delete_all, _Schema, Source, #{where := []}) ->
+  do_execute(delete_all, Source, undefined, undefined, all);
+do_execute(Op, Schema, Source, #{where := Conditions}) ->
   {PKs, FieldNames} = get_meta(Schema),
   MatchSpec = build_match_spec(Source, FieldNames, Conditions),
-  do_execute(Op, Source, PKs, FieldNames, MatchSpec, Opts).
+  do_execute(Op, Source, PKs, FieldNames, MatchSpec).
 
-do_execute(delete_all, Source, _PKs, _FieldNames, all, _Opts) ->
+do_execute(delete_all, Source, _PKs, _FieldNames, all) ->
   Count = mnesia:table_info(Source, size),
   case mnesia:clear_table(Source) of
     {atomic, ok} ->
@@ -187,7 +187,7 @@ do_execute(delete_all, Source, _PKs, _FieldNames, all, _Opts) ->
       xdb_lib:raise(Reason)
   end;
 
-do_execute(delete_all, Source, PKs, FieldNames, MatchSpec, _Opts) ->
+do_execute(delete_all, Source, PKs, FieldNames, MatchSpec) ->
   Transaction =
     fun() ->
       Records = mnesia:select(Source, MatchSpec),
@@ -198,7 +198,7 @@ do_execute(delete_all, Source, PKs, FieldNames, MatchSpec, _Opts) ->
   Records = exec_transaction(Transaction),
   {length(Records), to_fields(PKs, FieldNames, Records)};
 
-do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}, _Opts) ->
+do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}) ->
   GetTx =
     fun() ->
        mnesia:read({Source, pk(xdb_lib:kv_values(PkValues))})
@@ -207,10 +207,7 @@ do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}, _Opts) ->
   Records = exec_transaction(GetTx),
   {length(Records), to_fields(PKs, FieldNames, Records)};
 
-do_execute(all, Source, PKs, FieldNames, MatchSpec, Opts) ->
-  Limit = xdb_lib:keyfind(limit, Opts, 0),
-  Offset = xdb_lib:keyfind(offset, Opts, 0),
-
+do_execute(all, Source, PKs, FieldNames, {MatchSpec, Limit, Offset}) ->
   SelectAll =
     fun() ->
       mnesia:select(Source, MatchSpec)

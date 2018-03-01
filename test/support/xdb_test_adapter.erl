@@ -37,11 +37,11 @@ delete(_Repo, _Meta, _Filters, _Opts) ->
   {ok, Values}.
 
 %% @hidden
-execute(_Repo, _Op, _Meta, #{q_body := [{_, -1}]}, _Opts) ->
+execute(_Repo, _Op, _Meta, #{where := [{_, -1}]}, _Opts) ->
   {2, []};
-execute(_Repo, _Op, _Meta, #{q_body := [{_, -11}]}, _Opts) ->
+execute(_Repo, _Op, _Meta, #{where := [{_, -11}]}, _Opts) ->
   {2, [person:schema(#{id => 1}), person:schema(#{id => 2})]};
-execute(_Repo, _Op, _Meta, #{q_body := [{PK, Id}]}, _Opts) ->
+execute(_Repo, _Op, _Meta, #{where := [{PK, Id}]}, _Opts) ->
   {1, [person:schema(#{PK => Id})]};
 execute(_Repo, _Op, _Meta, _Query, _Opts) ->
   {1, [person:schema(#{id => 1})]}.

@@ -122,7 +122,7 @@ t_and_conditional(Config) ->
       {age, '>', 50}
     ]}
   ],
-  [] = Repo:all(xdb_query:new(person, Conditions1)),
+  [] = Repo:all(xdb_query:from(person, [{where, Conditions1}])),
 
   Conditions2 = [
     {'and', [
@@ -236,7 +236,7 @@ t_operators(Config) ->
       {age, '>', 100}
     ]}
   ],
-  [] = Repo:all(xdb_query:new(person, Conditions3)),
+  [] = Repo:all(xdb_query:from(person, [{where, Conditions3}])),
 
   Conditions4 = [
     {'and', [

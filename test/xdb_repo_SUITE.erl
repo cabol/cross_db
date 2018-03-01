@@ -175,7 +175,7 @@ t_delete(_Config) ->
 t_all(_Config) ->
   [#{'__meta__' := _, id := 1}] = ?REPO:all(person),
 
-  Query = xdb_query:new(person, [{id, 1}]),
+  Query = xdb_query:from(person, [{where, [{id, 1}]}]),
   [#{'__meta__' := _, id := 1}] = ?REPO:all(Query),
   ok.
 

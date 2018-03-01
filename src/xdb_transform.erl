@@ -232,7 +232,9 @@ build_repo(Opts) ->
     {xdb_repo_queryable, get_by,     2},
     {xdb_repo_queryable, get_by,     3},
     {xdb_repo_queryable, delete_all, 1},
-    {xdb_repo_queryable, delete_all, 2}
+    {xdb_repo_queryable, delete_all, 2},
+    {xdb_repo_queryable, update_all, 2},
+    {xdb_repo_queryable, update_all, 3}
   ],
 
   RepoFuns = [

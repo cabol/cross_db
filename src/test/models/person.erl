@@ -72,7 +72,7 @@ changeset(Person, Params) ->
 
 -spec all(xdb_repo:t(), xdb_query:conditions()) -> {integer(), #{any() => t()}} | no_return().
 all(Repo, Conditions) ->
-  Records = list_to_map(Repo:all(xdb_query:new(person, Conditions))),
+  Records = list_to_map(Repo:all(xdb_query:from(person, [{where, Conditions}]))),
   {maps:size(Records), Records}.
 
 -spec list_to_map([t()]) -> #{any() => t()}.

@@ -70,5 +70,5 @@ end_per_suite(_) ->
 -spec t_like_operator(xdb_ct:config()) -> ok.
 t_like_operator(_Config) ->
   ok = xdb_ct:assert_error(fun() ->
-    ?REPO:all(xdb_query:new(person, [{first_name, 'like', <<"A%">>}]))
+    ?REPO:all(xdb_query:from(person, [{where, [{first_name, 'like', <<"A%">>}]}]))
   end, {unsupported_operator, like}).

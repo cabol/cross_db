@@ -89,7 +89,7 @@ t_raw_query(Config) ->
   Expected = person:list_to_map(Repo:all(person)),
 
   MS = ets:fun2ms(fun(Record) -> Record end),
-  Query = xdb_query:new(person, {raw, MS}),
+  Query = xdb_query:from(person, [{raw, MS}]),
   Expected = person:list_to_map(Repo:all(Query)),
   ok.
 

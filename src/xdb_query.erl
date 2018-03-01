@@ -7,8 +7,8 @@
 
 %% API
 -export([
-  new/1,
-  new/2,
+  from/1,
+  from/2,
   validate_operator/1,
   pk_filter/2
 ]).
@@ -33,23 +33,24 @@
                      | {field_name(), operator(), field_value()}
                      | {field_name(), operator(), field_name()}.
 
-%% Query body
--type q_body() :: conditions() | {raw, any()}.
-
 %% Sort order
 -type sort() :: asc | desc.
 
 %% Query definition
 -type t() :: #{
-  schema := schema_mod(),
-  source := atom(),
-  q_body := q_body()
+  source  := atom(),
+  from    := schema_mod(),
+  select  => [field_name()],
+  where   => conditions(),
+  limit   => non_neg_integer(),
+  offset  => non_neg_integer(),
+  updates => xdb_lib:keyword(),
+  raw     => any()
 }.
 
 -export_type([
   queryable/0,
   conditions/0,
-  q_body/0,
   sort/0,
   t/0
 ]).
@@ -61,17 +62,26 @@
 %%% API
 %%%===================================================================
 
-%% @equiv new(Schema, [])
-new(Schema) ->
-  new(Schema, []).
+%% @equiv from(Schema, [])
+from(Schema) ->
+  from(Schema, []).
 
--spec new(schema_mod(), q_body()) -> t().
-new(Schema, QBody) when is_atom(Schema) ->
-  #{
-    schema => Schema,
-    source => xdb_schema_spec:name(Schema:schema_spec()),
-    q_body => validate_query(QBody)
-  }.
+-spec from(schema_mod(), xdb_lib:keyword()) -> t().
+from(Schema, Exprs) when is_atom(Schema), is_list(Exprs) ->
+  Query = #{
+    from    => Schema,
+    source  => xdb_schema_spec:name(Schema:schema_spec()),
+    select  => xdb_lib:keyfind(select, Exprs, []),
+    where   => xdb_lib:keyfind(where, Exprs, []),
+    limit   => xdb_lib:keyfind(limit, Exprs, 0),
+    offset  => xdb_lib:keyfind(offset, Exprs, 0),
+    updates => xdb_lib:keyfind(updates, Exprs, [])
+  },
+
+  case xdb_lib:keyfind(raw, Exprs) of
+    undefined -> Query;
+    RawQuery  -> Query#{raw => RawQuery}
+  end.
 
 -spec validate_operator(atom()) -> operator() | no_return().
 validate_operator(Op) when is_atom(Op) ->
@@ -85,7 +95,9 @@ validate_operator(Op) when is_atom(Op) ->
   Conditions :: conditions(),
   PkPairs    :: xdb_lib:keyword(),
   Res        :: {boolean(), PkPairs}.
-pk_filter(PKs, Conditions) ->
+pk_filter([_ | _], []) ->
+  {false, []};
+pk_filter([_ | _] = PKs, Conditions) ->
   xdb_lib:reduce_while(fun(PK, {Bool, Acc}) ->
     case xdb_lib:keyfind(PK, Conditions) of
       undefined -> {halt, {false, Acc}};
@@ -96,9 +108,3 @@ pk_filter(PKs, Conditions) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%% @private
-validate_query(Q) when is_list(Q) ->
-  Q;
-validate_query({raw, _} = Q) ->
-  Q.

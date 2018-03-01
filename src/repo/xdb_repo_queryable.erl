@@ -14,7 +14,9 @@
   get_by/4,
   get_by/5,
   delete_all/3,
-  delete_all/4
+  delete_all/4,
+  update_all/4,
+  update_all/5
 ]).
 
 %%%===================================================================
@@ -76,19 +78,36 @@ delete_all(Repo, Adapter, Queryable) ->
 delete_all(Repo, Adapter, Queryable, Opts) ->
   execute(delete_all, Repo, Adapter, Queryable, Opts).
 
+%% @equiv update_all(Repo, Adapter, Queryable, Updates, [])
+update_all(Repo, Adapter, Queryable, Updates) ->
+  update_all(Repo, Adapter, Queryable, Updates, []).
+
+-spec update_all(Repo, Adapter, Queryable, Updates, Opts) -> Res when
+  Repo      :: xdb_repo:t(),
+  Adapter   :: xdb_adapter:t(),
+  Queryable :: xdb_query:t() | xdb_query:queryable(),
+  Updates   :: xdb_lib:keyword(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: {integer(), [any()]} | no_return().
+update_all(Repo, Adapter, Queryable, Updates, Opts) when is_atom(Queryable) ->
+  Query = xdb_query:from(Queryable),
+  execute(update_all, Repo, Adapter, Query#{updates := Updates}, Opts);
+update_all(Repo, Adapter, #{from := _, source := _} = Query, Updates, Opts) ->
+  execute(update_all, Repo, Adapter, Query#{updates := Updates}, Opts).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
 %% @private
 execute(Op, Repo, Adapter, Queryable, Opts) when is_atom(Queryable) ->
-  Query = xdb_query:new(Queryable),
+  Query = xdb_query:from(Queryable),
   execute(Op, Repo, Adapter, Query, Opts);
-execute(all, Repo, Adapter, #{schema := Schema} = Queryable, Opts) ->
+execute(all, Repo, Adapter, #{from := Schema} = Queryable, Opts) ->
   Result = Adapter:execute(Repo, all, get_metadata(Queryable), Queryable, Opts),
   [Schema:schema(Fields) || Fields <- element(2, Result)];
-execute(delete_all, Repo, Adapter, #{schema := Schema} = Queryable, Opts) ->
-  case Adapter:execute(Repo, delete_all, get_metadata(Queryable), Queryable, Opts) of
+execute(Op, Repo, Adapter, #{from := Schema} = Queryable, Opts) ->
+  case Adapter:execute(Repo, Op, get_metadata(Queryable), Queryable, Opts) of
     {Count, ResL} when is_list(ResL) ->
       {Count, [Schema:schema(Fields) || Fields <- ResL]};
     {_, undefined} = Res ->
@@ -97,7 +116,7 @@ execute(delete_all, Repo, Adapter, #{schema := Schema} = Queryable, Opts) ->
 
 %% @private
 one(Repo, Adapter, Queryable, Clauses, Opts) ->
-  Query = xdb_query:new(Queryable, Clauses),
+  Query = xdb_query:from(Queryable, [{where, Clauses}]),
 
   case all(Repo, Adapter, Query, Opts) of
     []    -> undefined;
@@ -116,5 +135,5 @@ query_for_get(Repo, SchemaMod, Id) ->
   end.
 
 %% @private
-get_metadata(#{schema := Queryable, source := Source}) ->
+get_metadata(#{from := Queryable, source := Source}) ->
   #{schema => Queryable, source => Source}.

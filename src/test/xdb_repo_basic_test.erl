@@ -208,20 +208,26 @@ t_all_with_pagination(Config) ->
   ok = seed(Config),
 
   Expected = person:list_to_map(Repo:all(person)),
+  Query = xdb_query:from(person),
 
-  [P1] = Repo:all(person, [{limit, 1}, {offset, 0}]),
-  [P2] = Repo:all(person, [{limit, 1}, {offset, 1}]),
-  [P3] = Repo:all(person, [{limit, 1}, {offset, 2}]),
-  [P2, P3] = Repo:all(person, [{limit, 2}, {offset, 1}]),
-  [] = Repo:all(person, [{limit, 1}, {offset, 3}]),
-  [] = Repo:all(person, [{limit, 10}, {offset, 4}]),
+  [P1] = Repo:all(Query#{limit := 1, offset := 0}),
+  [P2] = Repo:all(Query#{limit := 1, offset := 1}),
+  [P3] = Repo:all(Query#{limit := 1, offset := 2}),
+  [P2, P3] = Repo:all(Query#{limit := 2, offset := 1}),
+  [] = Repo:all(Query#{limit := 1, offset := 3}),
+  [] = Repo:all(Query#{limit := 10, offset := 4}),
 
   Expected = person:list_to_map([P1, P2, P3]),
 
-  Query1 = xdb_query:new(person, [{age, '>', 100}]),
-  [] = Repo:all(Query1, [{limit, 10}, {offset, 0}]),
+  Query1 =
+    xdb_query:from(person, [
+      {where, [{age, '>', 100}]},
+      {limit, 10},
+      {offset, 0}
+    ]),
+  [] = Repo:all(Query1),
 
-  Query2 = xdb_query:new(person, [{age, '>', 40}]),
+  Query2 = xdb_query:from(person, [{where, [{age, '>', 40}]}]),
   #{
     1 := #{first_name := <<"Alan">>, last_name := <<"Turing">>},
     2 := #{first_name := <<"Charles">>, last_name := <<"Darwin">>}
@@ -262,7 +268,15 @@ t_delete_all_with_conditions(Config) ->
   } = All1 = person:list_to_map(Repo:all(person)),
   3 = maps:size(All1),
 
-  Query1 = xdb_query:new(person, [{'and', [{first_name, <<"Alan">>}, {age, '>', 40}]}]),
+  Query1 =
+    xdb_query:from(person, [
+      {where, [
+        {'and', [
+          {first_name, <<"Alan">>},
+          {age, '>', 40}
+        ]}
+      ]}
+    ]),
   {1, [_]} = Repo:delete_all(Query1),
 
   #{
