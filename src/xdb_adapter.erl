@@ -20,8 +20,8 @@
 
 -type exec_op() :: all | delete_all | update_all.
 
--type r_response() :: {Count :: integer(), [xdb_schema:fields()] | undefined}
-                    | no_return().
+-type exec_response() :: {Count :: integer(), [xdb_schema:fields()] | undefined}
+                       | no_return().
 
 -type w_response() :: {ok, xdb_schema:fields()}
                     | {invalid, constraints()}
@@ -60,7 +60,7 @@
   QueryMeta :: schema_meta(),
   Query     :: xdb_query:t(),
   Opts      :: xdb_lib:keyword(),
-  Res       :: r_response().
+  Res       :: exec_response().
 
 -callback insert(Repo, SchemaMeta, Fields, Opts) -> Res when
   Repo       :: xdb_repo:t(),
@@ -68,6 +68,13 @@
   Fields     :: xdb_schema:fields(),
   Opts       :: xdb_lib:keyword(),
   Res        :: w_response() | {error, conflict}.
+
+-callback insert_all(Repo, SchemaMeta, List, Opts) -> Res when
+  Repo       :: xdb_repo:t(),
+  SchemaMeta :: schema_meta(),
+  List       :: [xdb_schema:fields()],
+  Opts       :: xdb_lib:keyword(),
+  Res        :: exec_response() | {error, conflict}.
 
 -callback update(Repo, SchemaMeta, Fields, Filters, Opts) -> Res when
   Repo       :: xdb_repo:t(),

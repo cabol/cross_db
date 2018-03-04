@@ -15,6 +15,7 @@
 
 -export([
   insert/4,
+  insert_all/4,
   update/5,
   delete/4,
   execute/5
@@ -29,6 +30,12 @@ insert(_Repo, #{schema := Schema, source := Source}, Fields, Opts) ->
   {PKs, FieldNames} = get_meta(Schema),
   OnConflict = xdb_lib:keyfind(on_conflict, Opts, raise),
   do_insert(Source, PKs, FieldNames, Fields, OnConflict).
+
+%% @hidden
+insert_all(_Repo, #{schema := Schema, source := Source}, List, Opts) ->
+  {PKs, FieldNames} = get_meta(Schema),
+  OnConflict = xdb_lib:keyfind(on_conflict, Opts, raise),
+  do_insert_all(Source, PKs, FieldNames, List, OnConflict).
 
 %% @hidden
 update(_Repo, #{schema := Schema, source := Source}, Fields, Filters, _Opts) ->
@@ -56,74 +63,70 @@ execute(_Repo, Op, #{schema := Schema, source := Source}, Query, _Opts) ->
 %%%===================================================================
 
 %% @private
-get_meta(Schema) ->
-  SchemaSpec = Schema:schema_spec(),
-  PKFieldNames = xdb_schema_spec:pk_field_names(SchemaSpec),
-  FieldNames = xdb_schema_spec:field_names(SchemaSpec),
-  {PKFieldNames, FieldNames}.
-
-%% @private
-pk(Values) ->
-  list_to_tuple(Values).
-
-%% @private
-pk(PKs, Fields) ->
-  list_to_tuple(xdb_schema:get_pk_values(PKs, Fields)).
-
-%% @private
-to_fields(PKs, FieldNames, Records) when is_list(Records) ->
-  [rec_to_map(PKs, FieldNames, Record) || Record <- Records].
-
-%% @private
-rec_to_map(PKs, FieldNames, Record) ->
-  [_, PKValue | Values] = tuple_to_list(Record),
-  PkPairs = lists:zip(PKs, tuple_to_list(PKValue)),
-  KvPairs = lists:zip(FieldNames -- PKs, Values),
-  maps:from_list(PkPairs ++ KvPairs).
-
-%% @private
-exec_transaction(Transaction) ->
-  exec_transaction(Transaction, fun xdb_lib:raise/1).
-
-%% @private
-exec_transaction(Transaction, ErrorFun) ->
-  case mnesia:transaction(Transaction) of
-    {aborted, {{_, Reason} = Error, _}} when is_list(Reason) ->
-      ErrorFun(Error);
-    {aborted, Reason} ->
-      ErrorFun(Reason);
-    {atomic, Result} ->
-      Result
-  end.
-
-%% @private
 do_insert(Source, PKs, FieldNames, Fields, OnConflict) ->
-  InsertNew =
-    fun(Tab, Key, Rec) ->
-      case mnesia:read({Tab, Key}) of
-        [_] ->
-          {error, conflict};
-        [] ->
-          ok = mnesia:write(Rec),
-          {ok, Fields}
+  exec_transaction(fun() ->
+    Record = map_to_rec(Source, PKs, FieldNames, Fields),
+
+    Result =
+      case OnConflict of
+        replace ->
+          mnesia:write(Record);
+        nothing ->
+          ok;
+        raise ->
+          Key = pk(PKs, Fields),
+          insert_new(Source, Key, Record)
+      end,
+
+    case Result of
+      ok    -> {ok, Fields};
+      Error -> Error
+    end
+  end).
+
+%% @private
+do_insert_all(Source, PKs, FieldNames, List, OnConflict) ->
+  ReduceFun =
+    fun(Fields, Acc) ->
+      Record = map_to_rec(Source, PKs, FieldNames, Fields),
+
+      Result =
+        case OnConflict of
+          replace_all ->
+            mnesia:write(Record);
+          nothing ->
+            ok;
+          raise ->
+            Key = pk(PKs, Fields),
+            insert_new(Source, Key, Record)
+        end,
+
+      case Result of
+        ok ->
+          {cont, [Record | Acc]};
+        Error ->
+          {halt, Error}
       end
     end,
 
-  exec_transaction(fun() ->
-    Key = pk(PKs, Fields),
-    FieldValues = [maps:get(K, Fields, undefined) || K <- FieldNames -- PKs],
-    Record = list_to_tuple([Source, Key | FieldValues]),
+  InsertAll =
+    exec_transaction(fun() ->
+      xdb_lib:reduce_while(ReduceFun, [], List)
+    end),
 
-    case OnConflict of
-      replace ->
-        ok = mnesia:write(Record),
-        {ok, Fields};
-      nothing ->
-        {ok, Fields};
-      raise ->
-        InsertNew(Source, Key, Record)
-    end
-  end).
+  case InsertAll of
+    {error, _} = Error ->
+      Error;
+    Records ->
+      {length(Records), to_fields(PKs, FieldNames, lists:reverse(Records))}
+  end.
+
+%% @private
+insert_new(Tab, Key, Record) ->
+  case mnesia:read({Tab, Key}) of
+    [_] -> {error, conflict};
+    []  -> mnesia:write(Record)
+  end.
 
 %% @private
 do_update(Source, PKs, FieldNames, Fields, Filters) ->
@@ -132,12 +135,9 @@ do_update(Source, PKs, FieldNames, Fields, Filters) ->
     Key = pk(xdb_lib:kv_values(PkValues)),
 
     case mnesia:read({Source, Key}) of
-      [StoredRecord] ->
-        StoredFields = rec_to_map(PKs, FieldNames, StoredRecord),
-        NewFields = maps:merge(StoredFields, Fields),
-        FieldValues = [maps:get(K, NewFields, undefined) || K <- FieldNames -- PKs],
-        Record = list_to_tuple([Source, Key | FieldValues]),
-        ok = mnesia:write(Record),
+      [Record] ->
+        {NewRecord, NewFields} = update_record(Record, Source, PKs, FieldNames, Fields),
+        ok = mnesia:write(NewRecord),
         {ok, NewFields};
       [] ->
         {error, stale}
@@ -173,30 +173,15 @@ do_execute(all, Schema, Source, #{where := Conditions, limit := Limit, offset :=
   end;
 do_execute(delete_all, _Schema, Source, #{where := []}) ->
   do_execute(delete_all, Source, undefined, undefined, all);
-do_execute(Op, Schema, Source, #{where := Conditions}) ->
+do_execute(Op, Schema, Source, #{where := Conditions, updates := Updates}) ->
   {PKs, FieldNames} = get_meta(Schema),
   MatchSpec = build_match_spec(Source, FieldNames, Conditions),
-  do_execute(Op, Source, PKs, FieldNames, MatchSpec).
-
-do_execute(delete_all, Source, _PKs, _FieldNames, all) ->
-  Count = mnesia:table_info(Source, size),
-  case mnesia:clear_table(Source) of
-    {atomic, ok} ->
-      {Count, undefined};
-    {aborted, Reason} ->
-      xdb_lib:raise(Reason)
-  end;
-
-do_execute(delete_all, Source, PKs, FieldNames, MatchSpec) ->
-  Transaction =
-    fun() ->
-      Records = mnesia:select(Source, MatchSpec),
-      ok = lists:foreach(fun mnesia:delete_object/1, Records),
-      Records
-    end,
-
-  Records = exec_transaction(Transaction),
-  {length(Records), to_fields(PKs, FieldNames, Records)};
+  case Op of
+    update_all ->
+      do_execute(Op, Source, PKs, FieldNames, {MatchSpec, Updates});
+    _ ->
+      do_execute(Op, Source, PKs, FieldNames, MatchSpec)
+  end.
 
 do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}) ->
   GetTx =
@@ -232,7 +217,41 @@ do_execute(all, Source, PKs, FieldNames, {MatchSpec, Limit, Offset}) ->
     end,
 
   Records = exec_transaction(Transaction),
-  {length(Records), to_fields(PKs, FieldNames, Records)}.
+  {length(Records), to_fields(PKs, FieldNames, Records)};
+
+do_execute(delete_all, Source, _PKs, _FieldNames, all) ->
+  Count = mnesia:table_info(Source, size),
+  case mnesia:clear_table(Source) of
+    {atomic, ok} ->
+      {Count, undefined};
+    {aborted, Reason} ->
+      xdb_lib:raise(Reason)
+  end;
+
+do_execute(delete_all, Source, PKs, FieldNames, MatchSpec) ->
+  Transaction =
+    fun() ->
+      Records = mnesia:select(Source, MatchSpec),
+      ok = lists:foreach(fun mnesia:delete_object/1, Records),
+      Records
+    end,
+
+  Records = exec_transaction(Transaction),
+  {length(Records), to_fields(PKs, FieldNames, Records)};
+
+do_execute(update_all, Source, PKs, FieldNames, {MatchSpec, Updates}) ->
+  Fields = maps:from_list(Updates),
+  Transaction =
+    fun() ->
+      [begin
+        {NewRecord, NewFields} = update_record(Record, Source, PKs, FieldNames, Fields),
+        ok = mnesia:write(NewRecord),
+        NewFields
+      end || Record <- mnesia:select(Source, MatchSpec)]
+    end,
+
+  ResL = exec_transaction(Transaction),
+  {length(ResL), ResL}.
 
 %% @private
 process_records(Source, Records, Limit, Offset) ->
@@ -312,3 +331,57 @@ check_operator(like) ->
   error({unsupported_operator, like});
 check_operator(Op) ->
   xdb_query:validate_operator(Op).
+
+%% @private
+get_meta(Schema) ->
+  SchemaSpec = Schema:schema_spec(),
+  PKFieldNames = xdb_schema_spec:pk_field_names(SchemaSpec),
+  FieldNames = xdb_schema_spec:field_names(SchemaSpec),
+  {PKFieldNames, FieldNames}.
+
+%% @private
+pk(Values) ->
+  list_to_tuple(Values).
+
+%% @private
+pk(PKs, Fields) ->
+  list_to_tuple(xdb_schema:get_pk_values(PKs, Fields)).
+
+%% @private
+to_fields(PKs, FieldNames, Records) when is_list(Records) ->
+  [rec_to_map(PKs, FieldNames, Record) || Record <- Records].
+
+%% @private
+rec_to_map(PKs, FieldNames, Record) ->
+  [_, PKValue | Values] = tuple_to_list(Record),
+  PkPairs = lists:zip(PKs, tuple_to_list(PKValue)),
+  KvPairs = lists:zip(FieldNames -- PKs, Values),
+  maps:from_list(PkPairs ++ KvPairs).
+
+%% @private
+map_to_rec(Source, PKs, FieldNames, Fields) ->
+  Key = pk(PKs, Fields),
+  FieldValues = [maps:get(K, Fields, undefined) || K <- FieldNames -- PKs],
+  list_to_tuple([Source, Key | FieldValues]).
+
+%% @private
+update_record(Record, Source, PKs, FieldNames, Fields) ->
+  StoredFields = rec_to_map(PKs, FieldNames, Record),
+  NewFields = maps:merge(StoredFields, maps:without(PKs, Fields)),
+  NewRec = map_to_rec(Source, PKs, FieldNames, NewFields),
+  {NewRec, NewFields}.
+
+%% @private
+exec_transaction(Transaction) ->
+  exec_transaction(Transaction, fun xdb_lib:raise/1).
+
+%% @private
+exec_transaction(Transaction, ErrorFun) ->
+  case mnesia:transaction(Transaction) of
+    {aborted, {{_, Reason} = Error, _}} when is_list(Reason) ->
+      ErrorFun(Error);
+    {aborted, Reason} ->
+      ErrorFun(Reason);
+    {atomic, Result} ->
+      Result
+  end.

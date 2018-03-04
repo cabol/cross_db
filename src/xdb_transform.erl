@@ -221,6 +221,8 @@ build_repo(Opts) ->
   RepoFunSpecs = [
     {xdb_repo_schema,    insert,     1},
     {xdb_repo_schema,    insert,     2},
+    {xdb_repo_schema,    insert_all, 2},
+    {xdb_repo_schema,    insert_all, 3},
     {xdb_repo_schema,    update,     1},
     {xdb_repo_schema,    update,     2},
     {xdb_repo_schema,    delete,     1},

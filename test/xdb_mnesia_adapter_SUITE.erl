@@ -26,6 +26,8 @@
     t_insert/1,
     t_insert_errors/1,
     t_insert_on_conflict/1,
+    t_insert_all/1,
+    t_insert_all_on_conflict/1,
     t_update/1,
     t_delete/1,
     t_get/1,
@@ -33,7 +35,9 @@
     t_all/1,
     t_all_with_pagination/1,
     t_delete_all/1,
-    t_delete_all_with_conditions/1
+    t_delete_all_with_conditions/1,
+    t_update_all/1,
+    t_update_all_with_conditions/1
   ]}
 ]).
 

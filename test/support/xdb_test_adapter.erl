@@ -4,6 +4,7 @@
 
 -export([
   insert/4,
+  insert_all/4,
   update/5,
   delete/4,
   execute/5
@@ -22,6 +23,10 @@ insert(_Repo, _Meta, #{id := -11}, _Opts) ->
   {ok, #{id => {id, -11}}};
 insert(_Repo, _Meta, Fields, _Opts) ->
   {ok, Fields}.
+
+%% @hidden
+insert_all(_Repo,_Meta, List, _Opts) ->
+  {length(List), List}.
 
 %% @hidden
 update(_Repo, _Meta, #{id := -2}, [{id, -1}], _Opts) ->

@@ -10,6 +10,7 @@
 %% Test Cases
 -export([
   t_insert/1,
+  t_insert_all/1,
   t_update/1,
   t_delete/1,
   t_all/1,
@@ -101,6 +102,12 @@ t_insert(_Config) ->
       person:schema(_),
       ?REPO:insert(_))
   end, badarg).
+
+-spec t_insert_all(xdb_ct:config()) -> ok.
+t_insert_all(_Config) ->
+  {1, [#{id := 1}]} = ?REPO:insert_all(person, [#{id => 1}]),
+  {2, [#{id := 1}, #{id := 2}]} = ?REPO:insert_all(person, [#{id => 1}, #{id => 2}]),
+  ok.
 
 -spec t_update(xdb_ct:config()) -> ok.
 t_update(_Config) ->

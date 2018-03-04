@@ -11,6 +11,8 @@
   t_insert/1,
   t_insert_errors/1,
   t_insert_on_conflict/1,
+  t_insert_all/1,
+  t_insert_all_on_conflict/1,
   t_update/1,
   t_delete/1,
   t_get/1,
@@ -18,7 +20,9 @@
   t_all/1,
   t_all_with_pagination/1,
   t_delete_all/1,
-  t_delete_all_with_conditions/1
+  t_delete_all_with_conditions/1,
+  t_update_all/1,
+  t_update_all_with_conditions/1
 ]).
 
 %% Helpers
@@ -107,6 +111,58 @@ t_insert_on_conflict(Config) ->
 
   ok = assert_error(fun() ->
     Repo:insert(person:schema(#{id => 1}))
+  end, conflict).
+
+-spec t_insert_all(xdb_ct:config()) -> ok.
+t_insert_all(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  [] = Repo:all(person),
+
+  People = [
+    #{id => 1, first_name => "Alan", last_name => "Turing", age => 41},
+    #{id => 2, first_name => "Charles", last_name => "Darwin", age => 73},
+    #{id => 3, first_name => "Alan", last_name => "Poe", age => 40}
+  ],
+
+  {3, [_, _, _ ]} = Repo:insert_all(person, People),
+
+  #{
+    1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Turing">>},
+    2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
+    3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
+  } = All1 = person:list_to_map(Repo:all(person)),
+  3 = maps:size(All1),
+
+  ok = assert_error(fun() ->
+    Repo:insert_all(account, [#{id => 1, username => "cabol"}])
+  end, {no_exists, account}).
+
+-spec t_insert_all_on_conflict(xdb_ct:config()) -> ok.
+t_insert_all_on_conflict(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+  ok = seed(Config),
+
+  {1, [#{id := 1}]} =
+    Repo:insert_all(
+      person,
+      [#{id => 1, first_name => <<"FakeAlan">>}],
+      [{on_conflict, nothing}]
+    ),
+
+  #{id := 1, first_name := <<"Alan">>} = Repo:get(person, 1),
+
+  {1, [#{id := 1}]} =
+    Repo:insert_all(
+      person,
+      [#{id => 1, first_name => <<"FakeAlan">>}],
+      [{on_conflict, replace_all}]
+    ),
+
+  #{id := 1, first_name := <<"FakeAlan">>} = Repo:get(person, 1),
+
+  ok = assert_error(fun() ->
+    Repo:insert_all(person, [#{id => 1}])
   end, conflict).
 
 -spec t_update(xdb_ct:config()) -> ok.
@@ -241,13 +297,7 @@ t_delete_all(Config) ->
 
   [] = Repo:all(person),
   ok = seed(Config),
-
-  #{
-    1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Turing">>},
-    2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
-    3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
-  } = All = person:list_to_map(Repo:all(person)),
-  3 = maps:size(All),
+  [_, _, _] = Repo:all(person),
 
   {3, undefined} = Repo:delete_all(person),
   [] = Repo:all(person),
@@ -256,6 +306,56 @@ t_delete_all(Config) ->
 
 -spec t_delete_all_with_conditions(xdb_ct:config()) -> ok.
 t_delete_all_with_conditions(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  [] = Repo:all(person),
+  ok = seed(Config),
+  [_, _, _] = Repo:all(person),
+
+  Query1 =
+    xdb_query:from(person, [
+      {where, [
+        {'and', [
+          {first_name, <<"Alan">>},
+          {age, '>', 40}
+        ]}
+      ]}
+    ]),
+  {1, [_]} = Repo:delete_all(Query1),
+
+  #{
+    2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
+    3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
+  } = All2 = person:list_to_map(Repo:all(person)),
+  2 = maps:size(All2),
+  ok.
+
+-spec t_update_all(xdb_ct:config()) -> ok.
+t_update_all(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  [] = Repo:all(person),
+  ok = seed(Config),
+
+  #{
+    1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Turing">>},
+    2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
+    3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
+  } = All1 = person:list_to_map(Repo:all(person)),
+  3 = maps:size(All1),
+
+  {3, [_, _, _]} = Repo:update_all(person, [{last_name, <<"Other">>}]),
+
+  #{
+    1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Other">>},
+    2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Other">>},
+    3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Other">>}
+  } = All2 = person:list_to_map(Repo:all(person)),
+  3 = maps:size(All2),
+  ok.
+
+-spec t_update_all_with_conditions(xdb_ct:config()) -> ok.
+t_update_all_with_conditions(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
 
   [] = Repo:all(person),
@@ -277,13 +377,14 @@ t_delete_all_with_conditions(Config) ->
         ]}
       ]}
     ]),
-  {1, [_]} = Repo:delete_all(Query1),
+  {1, [_]} = Repo:update_all(Query1, [{last_name, <<"Other">>}]),
 
   #{
+    1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Other">>},
     2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
     3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
   } = All2 = person:list_to_map(Repo:all(person)),
-  2 = maps:size(All2),
+  3 = maps:size(All2),
   ok.
 
 %%%===================================================================

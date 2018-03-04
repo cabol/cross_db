@@ -62,6 +62,14 @@
   Opts   :: xdb_lib:keyword(),
   Res    :: w_respose().
 
+-callback insert_all(SchemaMod, Entries, Opts) -> Res when
+  SchemaMod :: module(),
+  Entries   :: [xdb_schema:fields()],
+  Opts      :: xdb_lib:keyword(),
+  Count     :: integer(),
+  Returning :: [xdb_schema:fields()] | undefined,
+  Res       :: {Count, Returning} | no_return().
+
 -callback update(Changeset, Opts) -> Res when
   Changeset :: xdb_changeset:t(),
   Opts      :: xdb_lib:keyword(),

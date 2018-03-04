@@ -7,6 +7,8 @@
 
 %% API
 -export([
+  insert_all/4,
+  insert_all/5,
   insert/3,
   insert/4,
   update/3,
@@ -18,6 +20,23 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+%% @equiv insert_all(Repo, Adapter, Schema, Entries, [])
+insert_all(Repo, Adapter, Schema, Entries) ->
+  insert_all(Repo, Adapter, Schema, Entries, []).
+
+-spec insert_all(Repo, Adapter, Schema, Entries, Opts) -> Res when
+  Repo      :: xdb_repo:t(),
+  Adapter   :: xdb_adapter:t(),
+  Schema    :: module(),
+  Entries   :: [xdb_schema:fields()],
+  Opts      :: xdb_lib:keyword(),
+  Count     :: integer(),
+  Returning :: [any()] | undefined,
+  Res       :: {Count, Returning} | no_return().
+insert_all(Repo, Adapter, Schema, Entries, Opts) ->
+  Changeset = xdb_changeset:change(Schema:schema(), #{}),
+  do_insert_all(Repo, Adapter, Changeset, Entries, Opts).
 
 %% @equiv insert(Repo, Adapter, Data, [])
 insert(Repo, Adapter, Data) ->
@@ -67,6 +86,16 @@ delete(Repo, Adapter, Changeset, Opts) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%% @private
+do_insert_all(Repo, Adapter, Changeset, Entries, Opts0) ->
+  {#{schema := Schema} = Meta, _Data, Opts} = get_metadata(Changeset, Opts0),
+  case Adapter:insert_all(Repo, Meta, Entries, Opts) of
+    {error, conflict} ->
+      error({conflict, xdb_changeset:data(Changeset)});
+    {Count, Rows} ->
+      {Count, [Schema:schema(Row) || Row <- Rows]}
+  end.
 
 %% @private
 do_insert(Repo, Adapter, #{is_valid := true} = Changeset, Opts0) ->
@@ -156,17 +185,17 @@ add_pk_filter(Schema, Filters) ->
 %% @private
 exec(Changeset, Adapter, Action, Args) ->
   Result = apply(Adapter, Action, Args),
-  process_result(Result, Changeset).
+  postprocess(Result, Changeset).
 
 %% @private
-process_result({ok, Values}, Changeset) ->
+postprocess({ok, Values}, Changeset) ->
   {ok, load_changes(Changeset, loaded, Values)};
-process_result({invalid, Constraints}, _Changeset) ->
+postprocess({invalid, Constraints}, _Changeset) ->
   %% @TODO: constraints_to_errors (add errors to changeset)
   {error, Constraints};
-process_result({error, conflict}, Changeset) ->
+postprocess({error, conflict}, Changeset) ->
   error({conflict, xdb_changeset:data(Changeset)});
-process_result({error, stale}, Changeset) ->
+postprocess({error, stale}, Changeset) ->
   xdb_exception:stale_entry_error(xdb_changeset:action(Changeset), xdb_changeset:data(Changeset));
-process_result({error, Reason}, _Changeset) ->
+postprocess({error, Reason}, _Changeset) ->
   error(Reason).
