@@ -118,7 +118,7 @@ set_fields(#{'__meta__' := #{schema := Mod}} = Schema, Fields) ->
     end
   end, Schema, Fields).
 
-%% @equiv set_fields(Schema, #{cast_field_name(FieldName), FieldValue})
+%% @equiv set_fields(Schema, Fields)
 set_field(Schema, FieldName, FieldValue) ->
   set_fields(Schema, #{cast_field_name(FieldName) => FieldValue}).
 

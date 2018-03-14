@@ -139,7 +139,8 @@ Then a second model `post`:
 -schema({posts, [
   {id,         integer,  [primary_key]},
   {blog_id,    integer},  % by default the options are []
-  {text,       string},
+  {title,      string},
+  {body,       string},
   {created_at, datetime, [{setter, false}]},
   {updated_at, datetime}
 ]}).
@@ -175,8 +176,8 @@ changeset(Post, Params) ->
     Post,
     post:schema(_),
     xdb_changeset:cast(_, Params, [id, blog_id, text, created_at, updated_at]),
-    xdb_changeset:validate_required(_, [id, blog_id, text]),
-    xdb_changeset:validate_length(_, text, [{min, 4}, {max, 256}])
+    xdb_changeset:validate_required(_, [id, blog_id, title]),
+    xdb_changeset:validate_length(_, title, [{min, 4}, {max, 256}])
   ).
 ```
 
@@ -195,9 +196,11 @@ Let’s use this changeset to attempt to create a new record without a `blog_id`
 and `text`:
 
 ```erlang
-Post = post:schema(#{}).
-Changeset = post:changeset(Post, #{}).
-blog_repo:insert(Changeset).
+> Post = post:schema(#{}).
+
+> Changeset = post:changeset(Post, #{}).
+
+> blog_repo:insert(Changeset).
 ```
 
 On the first line here, we get a struct from the `post` module. We know what
@@ -216,19 +219,20 @@ third line runs, we’ll see this:
          data =>
              #{'__meta__' =>
                    #{schema => post,source => posts,state => built},
-               blog_id => undefined,created_at => undefined,
-               id => undefined,text => undefined,updated_at => undefined},
+               blog_id => undefined,body => undefined,
+               created_at => undefined,id => undefined,title => undefined,
+               updated_at => undefined},
          errors =>
              [{id,{<<"can't be blank">>,[{validation,required}]}},
               {blog_id,{<<"can't be blank">>,[{validation,required}]}},
-              {text,{<<"can't be blank">>,[{validation,required}]}}],
+              {title,{<<"can't be blank">>,[{validation,required}]}}],
          filters => #{},is_valid => false,params => #{},
          repo => blog_repo,
-         required => [id,blog_id,text],
+         required => [id,blog_id,title],
          schema => post,
          types =>
-             #{blog_id => integer,created_at => datetime,id => integer,
-               text => string,updated_at => datetime}}}
+             #{blog_id => integer,body => string,created_at => datetime,
+               id => integer,title => string,updated_at => datetime}}}
 ```
 
 Just like the last time we did an insertion, this returns a tuple. This time
@@ -243,9 +247,11 @@ is returned. We can access these by doing some pattern matching:
 Then we can get to the errors by doing `xdb_changeset:errors(Changeset1)`:
 
 ```erlang
-[{id,{<<"can't be blank">>,[{validation,required}]}},
- {blog_id,{<<"can't be blank">>,[{validation,required}]}},
- {text,{<<"can't be blank">>,[{validation,required}]}}]
+[
+  {id,{<<"can't be blank">>,[{validation,required}]}},
+  {blog_id,{<<"can't be blank">>,[{validation,required}]}},
+  {title,{<<"can't be blank">>,[{validation,required}]}}
+]
 ```
 
 And we can ask the changeset itself it is valid, even before doing an insertion:
@@ -263,7 +269,7 @@ Let’s try now with some valid data.
 ```erlang
 > Post = post:schema(#{}).
 
-> Changeset = post:changeset(Post, #{id => 1, blog_id => 1, text => <<"Hello">>}).
+> Changeset = post:changeset(Post, #{id => 1, blog_id => 1, title => <<"My first post">>}).
 
 > xdb_changeset:errors(Changeset).
 []
@@ -279,8 +285,9 @@ this changeset it will work:
 > blog_repo:insert(Changeset).
 {ok,#{'__meta__' =>
           #{schema => post,source => posts,state => loaded},
-      blog_id => 1,created_at => undefined,id => 1,
-      text => <<"Hello">>,updated_at => undefined}}
+      blog_id => 1,body => undefined,created_at => undefined,
+      id => 1,title => <<"My first post">>,
+      updated_at => undefined}}
 ```
 
 ## Inserting data
@@ -294,17 +301,19 @@ We can insert a new entries into our blog repo with this code:
       created_at => undefined,id => 1,name => <<"erlang">>,
       status => undefined,updated_at => undefined}}
 
-> blog_repo:insert(post:schema(#{id => 1, blog_id => 1, text => "my first post"})).
+> blog_repo:insert(post:schema(#{id => 1, blog_id => 1, title => "my first post"})).
 {ok,#{'__meta__' =>
           #{schema => post,source => posts,state => loaded},
-      blog_id => 1,created_at => undefined,id => 1,
-      text => <<"my first post">>,updated_at => undefined}}
+      blog_id => 1,body => undefined,created_at => undefined,
+      id => 1,title => <<"my first post">>,
+      updated_at => undefined}}
 
-> blog_repo:insert(post:schema(#{id => 2, blog_id => 1, text => "my second post"})).
+> blog_repo:insert(post:schema(#{id => 2, blog_id => 1, title => "my second post"})).
 {ok,#{'__meta__' =>
           #{schema => post,source => posts,state => loaded},
-      blog_id => 1,created_at => undefined,id => 2,
-      text => <<"my second post">>,updated_at => undefined}}
+      blog_id => 1,body => undefined,created_at => undefined,
+      id => 2,title => <<"my second post">>,
+      updated_at => undefined}}
 ```
 
 ## Retrieving entries
@@ -325,12 +334,14 @@ To fetch all records from the schema, `cross_db` provides the `all` function:
 > blog_repo:all(post).
 [#{'__meta__' =>
        #{schema => post,source => posts,state => built},
-   blog_id => 1,created_at => undefined,id => 1,
-   text => <<"my first post">>,updated_at => undefined},
+   blog_id => 1,body => undefined,created_at => undefined,
+   id => 1,title => <<"my first post">>,
+   updated_at => undefined},
  #{'__meta__' =>
        #{schema => post,source => posts,state => built},
-   blog_id => 1,created_at => undefined,id => 2,
-   text => <<"my second post">>,updated_at => undefined}]
+   blog_id => 1,body => undefined,created_at => undefined,
+   id => 2,title => <<"my second post">>,
+   updated_at => undefined}]
 ```
 
 ### Filtering results
@@ -339,18 +350,27 @@ You can create your own queries/filters using the [xdb_query](../src/xdb_query.e
 module, like so:
 
 ```erlang
-> blog_repo:all(xdb_query:new(post, [{blog_id, 1}])).
+> blog_repo:all(xdb_query:from(post, [{where, [{blog_id, 1}]}])).
 [#{'__meta__' =>
        #{schema => post,source => posts,state => built},
-   blog_id => 1,created_at => undefined,id => 1,
-   text => <<"my first post">>,updated_at => undefined},
+   blog_id => 1,body => undefined,created_at => undefined,
+   id => 1,title => <<"my first post">>,
+   updated_at => undefined},
  #{'__meta__' =>
        #{schema => post,source => posts,state => built},
-   blog_id => 1,created_at => undefined,id => 2,
-   text => <<"my second post">>,updated_at => undefined}]
+   blog_id => 1,body => undefined,created_at => undefined,
+   id => 2,title => <<"my second post">>,
+   updated_at => undefined}]
 
- > blog_repo:all(xdb_query:new(post, [{blog_id, 2}])).
- []
+> blog_repo:all(xdb_query:from(post, [{where, [{blog_id, 2}]}])).
+[]
+
+> blog_repo:all(xdb_query:from(post, [{where, [{title, <<"my first post">>}]}])).
+[#{'__meta__' =>
+       #{schema => post,source => posts,state => built},
+   blog_id => 1,body => undefined,created_at => undefined,
+   id => 1,title => <<"my first post">>,
+   updated_at => undefined}]
 ```
 
 ### Fetching a single entry
@@ -365,14 +385,16 @@ module, like so:
 > blog_repo:get(post, 1).
 #{'__meta__' =>
       #{schema => post,source => posts,state => built},
-  blog_id => 1,created_at => undefined,id => 1,
-  text => <<"my first post">>,updated_at => undefined}
+  blog_id => 1,body => undefined,created_at => undefined,
+  id => 1,title => <<"my first post">>,
+  updated_at => undefined}
 
-> blog_repo:get_by(post, [{text, <<"my second post">>}]).
+> blog_repo:get_by(post, [{title, <<"my second post">>}]).
 #{'__meta__' =>
       #{schema => post,source => posts,state => built},
-  blog_id => 1,created_at => undefined,id => 2,
-  text => <<"my second post">>,updated_at => undefined}
+  blog_id => 1,body => undefined,created_at => undefined,
+  id => 2,title => <<"my second post">>,
+  updated_at => undefined}
 ```
 
 ## Updating records
@@ -397,22 +419,23 @@ the `text` has changed without inspecting the database. Let’s build the
 changeset then:
 
 ```erlang
-> Changeset = post:changeset(Post, #{text => <<"edited post">>}).
+> Changeset = post:changeset(Post, #{title => <<"edited post">>}).
 #{action => undefined,
-  changes => #{text => <<"edited post">>},
+  changes => #{title => <<"edited post">>},
   data =>
       #{'__meta__' =>
             #{schema => post,source => posts,state => built},
-        blog_id => 1,created_at => undefined,id => 1,
-        text => <<"my first post">>,updated_at => undefined},
+        blog_id => 1,body => undefined,created_at => undefined,
+        id => 1,title => <<"my first post">>,
+        updated_at => undefined},
   errors => [],filters => #{},is_valid => true,
-  params => #{text => <<"edited post">>},
+  params => #{title => <<"edited post">>},
   repo => undefined,
-  required => [id,blog_id,text],
+  required => [id,blog_id,title],
   schema => post,
   types =>
-      #{blog_id => integer,created_at => datetime,id => integer,
-        text => string,updated_at => datetime}}
+      #{blog_id => integer,body => string,created_at => datetime,
+        id => integer,title => string,updated_at => datetime}}
 ```
 
 Then update the database with this change:
@@ -421,8 +444,8 @@ Then update the database with this change:
 > blog_repo:update(Changeset).
 {ok,#{'__meta__' =>
           #{schema => post,source => posts,state => loaded},
-      blog_id => 1,created_at => undefined,id => 1,
-      text => <<"edited post">>,updated_at => undefined}}
+      blog_id => 1,body => undefined,created_at => undefined,
+      id => 1,title => <<"edited post">>,updated_at => undefined}}
 ```
 
 We can check if the changes were made:
@@ -431,8 +454,8 @@ We can check if the changes were made:
 > blog_repo:get(post, 1).
 #{'__meta__' =>
       #{schema => post,source => posts,state => built},
-  blog_id => 1,created_at => undefined,id => 1,
-  text => <<"edited post">>,updated_at => undefined}
+  blog_id => 1,body => undefined,created_at => undefined,
+  id => 1,title => <<"edited post">>,updated_at => undefined}
 ```
 
 If the changeset fails for any reason, the result of `blog_repo:update` will be
@@ -440,45 +463,47 @@ If the changeset fails for any reason, the result of `blog_repo:update` will be
 `text` in our changeset’s parameters:
 
 ```erlang
-> ChangesetWithErrors = post:changeset(Post, #{text => <<"">>}).
+> ChangesetWithErrors = post:changeset(Post, #{title => <<"">>}).
 #{action => undefined,
-  changes => #{text => <<>>},
+  changes => #{title => <<>>},
   data =>
       #{'__meta__' =>
             #{schema => post,source => posts,state => built},
-        blog_id => 1,created_at => undefined,id => 1,
-        text => <<"my first post">>,updated_at => undefined},
+        blog_id => 1,body => undefined,created_at => undefined,
+        id => 1,title => <<"my first post">>,
+        updated_at => undefined},
   errors =>
-      [{text,{<<"should be at least 4 character(s)">>,
-              [{validation,length}]}}],
+      [{title,{<<"should be at least 4 character(s)">>,
+               [{validation,length}]}}],
   filters => #{},is_valid => false,
-  params => #{text => <<>>},
+  params => #{title => <<>>},
   repo => undefined,
-  required => [id,blog_id,text],
+  required => [id,blog_id,title],
   schema => post,
   types =>
-      #{blog_id => integer,created_at => datetime,id => integer,
-        text => string,updated_at => datetime}}
+      #{blog_id => integer,body => string,created_at => datetime,
+        id => integer,title => string,updated_at => datetime}}
 
 > blog_repo:update(ChangesetWithErrors).
 {error,#{action => update,
-         changes => #{text => <<>>},
+         changes => #{title => <<>>},
          data =>
              #{'__meta__' =>
                    #{schema => post,source => posts,state => built},
-               blog_id => 1,created_at => undefined,id => 1,
-               text => <<"my first post">>,updated_at => undefined},
+               blog_id => 1,body => undefined,created_at => undefined,
+               id => 1,title => <<"my first post">>,
+               updated_at => undefined},
          errors =>
-             [{text,{<<"should be at least 4 character(s)">>,
-                     [{validation,length}]}}],
+             [{title,{<<"should be at least 4 character(s)">>,
+                      [{validation,length}]}}],
          filters => #{},is_valid => false,
-         params => #{text => <<>>},
+         params => #{title => <<>>},
          repo => blog_repo,
-         required => [id,blog_id,text],
+         required => [id,blog_id,title],
          schema => post,
          types =>
-             #{blog_id => integer,created_at => datetime,id => integer,
-               text => string,updated_at => datetime}}}
+             #{blog_id => integer,body => string,created_at => datetime,
+               id => integer,title => string,updated_at => datetime}}}
 ```
 
 So we can also use a `case` statement to do different things depending on the
@@ -502,14 +527,16 @@ call `blog_repo:delete` to delete that record:
 > Post = blog_repo:get(post, 1).
 #{'__meta__' =>
       #{schema => post,source => posts,state => built},
-  blog_id => 1,created_at => undefined,id => 1,
-  text => <<"my first post">>,updated_at => undefined}
+  blog_id => 1,body => undefined,created_at => undefined,
+  id => 1,title => <<"my first post">>,
+  updated_at => undefined}
 
 > blog_repo:delete(Post).
 {ok,#{'__meta__' =>
           #{schema => post,source => posts,state => loaded},
-      blog_id => 1,created_at => undefined,id => 1,
-      text => <<"edited post">>,updated_at => undefined}}
+      blog_id => 1,body => undefined,created_at => undefined,
+      id => 1,title => <<"my first post">>,
+      updated_at => undefined}}
 
 > blog_repo:get(post, 1).
 undefined

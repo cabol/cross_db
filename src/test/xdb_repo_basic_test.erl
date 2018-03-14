@@ -40,6 +40,7 @@
 init_per_testcase(_, Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
   {ok, _} = Repo:start_link(),
+  {_, _} = Repo:delete_all(person),
   Config.
 
 -spec end_per_testcase(atom(), xdb_ct:config()) -> xdb_ct:config().
@@ -91,23 +92,32 @@ t_insert_errors(Config) ->
 -spec t_insert_on_conflict(xdb_ct:config()) -> ok.
 t_insert_on_conflict(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  ok = seed(Config),
 
-  {ok, #{id := 1}} =
-    Repo:insert(
-      person:schema(#{id => 1, first_name => <<"FakeAlan">>}),
-      [{on_conflict, nothing}]
-    ),
+  ok = lists:foreach(fun(_) ->
+    {ok, #{id := 1}} =
+      Repo:insert(
+        person:schema(#{id => 1, first_name => <<"Alan">>}),
+        [{on_conflict, nothing}]
+      )
+  end, lists:seq(1, 3)),
 
   #{id := 1, first_name := <<"Alan">>} = Repo:get(person, 1),
 
   {ok, #{id := 1}} =
     Repo:insert(
       person:schema(#{id => 1, first_name => <<"FakeAlan">>}),
-      [{on_conflict, replace}]
+      [{on_conflict, replace_all}]
     ),
 
-  #{id := 1, first_name := <<"FakeAlan">>} = Repo:get(person, 1),
+  #{id := 1, first_name := <<"FakeAlan">>, last_name := undefined} = Repo:get(person, 1),
+
+  {ok, #{id := 1}} =
+    Repo:insert(
+      person:schema(#{id => 1, first_name => <<"Alan">>, last_name => <<"Poe">>}),
+      [{on_conflict, {replace, [last_name]}}]
+    ),
+
+  #{id := 1, first_name := <<"FakeAlan">>, last_name := <<"Poe">>} = Repo:get(person, 1),
 
   ok = assert_error(fun() ->
     Repo:insert(person:schema(#{id => 1}))
@@ -116,7 +126,6 @@ t_insert_on_conflict(Config) ->
 -spec t_insert_all(xdb_ct:config()) -> ok.
 t_insert_all(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-
   [] = Repo:all(person),
 
   People = [
@@ -126,6 +135,10 @@ t_insert_all(Config) ->
   ],
 
   {3, [_, _, _ ]} = Repo:insert_all(person, People),
+
+  ok = lists:foreach(fun(_) ->
+    {3, [_, _, _ ]} = Repo:insert_all(person, People, [{on_conflict, nothing}])
+  end, lists:seq(1, 3)),
 
   #{
     1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Turing">>},
@@ -159,7 +172,16 @@ t_insert_all_on_conflict(Config) ->
       [{on_conflict, replace_all}]
     ),
 
-  #{id := 1, first_name := <<"FakeAlan">>} = Repo:get(person, 1),
+  #{id := 1, first_name := <<"FakeAlan">>, last_name := undefined} = Repo:get(person, 1),
+
+  {1, [#{id := 1}]} =
+    Repo:insert_all(
+      person,
+      [#{id => 1, first_name => <<"Alan">>, last_name => <<"Poe">>}],
+      [{on_conflict, {replace, [last_name]}}]
+    ),
+
+  #{id := 1, first_name := <<"FakeAlan">>, last_name := <<"Poe">>} = Repo:get(person, 1),
 
   ok = assert_error(fun() ->
     Repo:insert_all(person, [#{id => 1}])
@@ -218,6 +240,7 @@ t_delete(Config) ->
 -spec t_get(xdb_ct:config()) -> ok.
 t_get(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
+
   undefined = Repo:get(person, 1),
   ok = seed(Config),
 

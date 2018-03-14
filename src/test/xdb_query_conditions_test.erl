@@ -34,6 +34,7 @@
 init_per_testcase(_, Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
   {ok, _} = Repo:start_link(),
+  ok = seed(Config),
   Config.
 
 -spec end_per_testcase(atom(), xdb_ct:config()) -> xdb_ct:config().
@@ -49,8 +50,6 @@ end_per_testcase(_, Config) ->
 -spec t_all(xdb_ct:config()) -> ok.
 t_all(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  [] = Repo:all(person),
-  ok = seed(Config),
 
   #{
     1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Turing">>},
@@ -69,8 +68,6 @@ t_all(Config) ->
 -spec t_or_conditional(xdb_ct:config()) -> ok.
 t_or_conditional(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  [] = Repo:all(person),
-  ok = seed(Config),
 
   Conditions1 = [
     {'or', [
@@ -112,8 +109,6 @@ t_or_conditional(Config) ->
 -spec t_and_conditional(xdb_ct:config()) -> ok.
 t_and_conditional(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  [] = Repo:all(person),
-  ok = seed(Config),
 
   Conditions1 = [
     {'and', [
@@ -156,8 +151,6 @@ t_and_conditional(Config) ->
 -spec t_not_conditional(xdb_ct:config()) -> ok.
 t_not_conditional(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  [] = Repo:all(person),
-  ok = seed(Config),
 
   Conditions1 = [
     {'not', {first_name, <<"Alan">>}}
@@ -181,8 +174,6 @@ t_not_conditional(Config) ->
 -spec t_not_null_conditional(xdb_ct:config()) -> ok.
 t_not_null_conditional(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  [] = Repo:all(person),
-  ok = seed(Config),
 
   {3, #{
     1 := #{first_name := <<"Alan">>, last_name := <<"Turing">>},
@@ -194,8 +185,6 @@ t_not_null_conditional(Config) ->
 -spec t_null_conditional(xdb_ct:config()) -> ok.
 t_null_conditional(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  [] = Repo:all(person),
-  ok = seed(Config),
 
   {1, #{
     4 := #{first_name := <<"John">>, last_name := <<"Lennon">>}
@@ -205,8 +194,6 @@ t_null_conditional(Config) ->
 -spec t_operators(xdb_ct:config()) -> ok.
 t_operators(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  [] = Repo:all(person),
-  ok = seed(Config),
 
   Conditions1 = [
     {'and', [
@@ -285,8 +272,6 @@ t_operators(Config) ->
 -spec t_like_operator(xdb_ct:config()) -> ok.
 t_like_operator(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  [] = Repo:all(person),
-  ok = seed(Config),
 
   {2, #{
     1 := #{first_name := <<"Alan">>, last_name := <<"Turing">>},
@@ -297,8 +282,6 @@ t_like_operator(Config) ->
 -spec t_deeply_nested(xdb_ct:config()) -> ok.
 t_deeply_nested(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
-  [] = Repo:all(person),
-  ok = seed(Config),
 
   Conditions1 = [
     {address, 'not_null'},
@@ -341,6 +324,8 @@ t_deeply_nested(Config) ->
 -spec seed(xdb_ct:config()) -> ok.
 seed(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
+  {_, _} = Repo:delete_all(person),
+  [] = Repo:all(person),
 
   People = [
     person:schema(#{

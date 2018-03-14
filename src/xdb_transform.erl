@@ -25,7 +25,15 @@ parse_transform(ASTs, _Options) ->
 
     maybe_add_funs(Result)
   catch
-    _E:R -> erlang:raise(error, R, erlang:get_stacktrace())
+    error:{badkey, Key} ->
+      Error = "missing ~p configuration in config",
+      xdb_lib:raise(missing_config, Error, [Key]);
+    error:{badadapter, Adapter} ->
+      Error = "adapter ~p was not compiled, ensure it is correct " ++
+              "and it is included as a project dependency",
+      xdb_lib:raise(badadapter, Error, [Adapter]);
+    _E:R ->
+      xdb_lib:raise(transform_error, R)
   end.
 
 %% @private
@@ -104,7 +112,7 @@ do_splicing_args([H | T]) ->
 get_value(Key, KVList) ->
   case lists:keyfind(Key, 1, KVList) of
     {Key, Value} -> Value;
-    false        -> error({missing_value, Key})
+    false        -> error({badkey, Key})
   end.
 
 %% @private
@@ -216,9 +224,25 @@ setter(Name) ->
 build_repo(Opts) ->
   Repo = erlang:get(module),
   OtpApp = get_value(otp_app, Opts),
-  Adapter = get_value(adapter, Opts),
+  Adapter = load_adapter(Opts),
 
-  RepoFunSpecs = [
+  RepoFuns = [repo_fun_template(M, F, Arity, Repo, Adapter) || {M, F, Arity} <- repo_api_specs()],
+  TxRepoFuns = maybe_transaction_funs(repo_transaction_api_specs(Adapter), Repo, Adapter),
+  RepoMetaFuns = repo_meta_funs(Repo, OtpApp, Adapter),
+
+  add_funs(RepoMetaFuns ++ RepoFuns ++ TxRepoFuns).
+
+%% @private
+load_adapter(Opts) ->
+  Adapter = get_value(adapter, Opts),
+  case code:ensure_loaded(Adapter) of
+    {module, Adapter} -> Adapter;
+    {error, _What}    -> error({badadapter, Adapter})
+  end.
+
+%% @private
+repo_api_specs() ->
+  [
     {xdb_repo_schema,    insert,     1},
     {xdb_repo_schema,    insert,     2},
     {xdb_repo_schema,    insert_all, 2},
@@ -237,15 +261,16 @@ build_repo(Opts) ->
     {xdb_repo_queryable, delete_all, 2},
     {xdb_repo_queryable, update_all, 2},
     {xdb_repo_queryable, update_all, 3}
-  ],
+  ].
 
-  RepoFuns = [
-    repo_fun_template(Mod, Action, Arity, Repo, Adapter)
-    || {Mod, Action, Arity} <- RepoFunSpecs
-  ],
-
-  RepoMetaFuns = repo_meta_funs(Repo, OtpApp, Adapter),
-  add_funs(RepoMetaFuns ++ RepoFuns).
+%% @private
+repo_transaction_api_specs(Adapter) ->
+  [
+    {xdb_repo_queryable, transaction,    1},
+    {xdb_repo_queryable, transaction,    2},
+    {Adapter,            in_transaction, 0},
+    {Adapter,            rollback,       1}
+  ].
 
 %% @private
 repo_meta_funs(Repo, OtpApp, Adapter) ->
@@ -272,7 +297,29 @@ repo_sup_spec(Repo) ->
 
 %% @private
 repo_fun_template(Mod, Fun, Arity, Repo, Adapter) ->
-  FN = atom_to_list(Fun),
   Args = splicing_args(Arity),
-  Body = FN ++ "(" ++ Args ++ ") -> ~p:" ++ FN ++ "(~p, ~p, " ++ Args ++ ").",
-  {Fun, Arity, ?Q(text(Body, [Mod, Repo, Adapter]))}.
+  Body = build_repo_fun(Repo, Adapter, Mod, atom_to_list(Fun), Args),
+  {Fun, Arity, Body}.
+
+%% @private
+build_repo_fun(Repo, Adapter, Adapter, Fun, Args) ->
+  Body = build_repo_fun_body(Fun, "~p", Args),
+  ?Q(text(Body, [Adapter, Repo]));
+build_repo_fun(Repo, Adapter, Mod, Fun, Args) ->
+  Body = build_repo_fun_body(Fun, "~p, ~p", Args),
+  ?Q(text(Body, [Mod, Repo, Adapter])).
+
+%% @private
+build_repo_fun_body(Fun, Prefix, "") ->
+  Fun ++ "() -> ~p:" ++ Fun ++ "(" ++ Prefix ++ ").";
+build_repo_fun_body(Fun, Prefix, Args) ->
+  Fun ++ "(" ++ Args ++ ") -> ~p:" ++ Fun ++ "(" ++ Prefix ++ ", " ++ Args ++ ").".
+
+%% @private
+maybe_transaction_funs(Specs, Repo, Adapter) ->
+  case erlang:function_exported(Adapter, transaction, 3) of
+    true ->
+      [repo_fun_template(Mod, Action, Arity, Repo, Adapter) || {Mod, Action, Arity} <- Specs];
+    false ->
+      []
+  end.

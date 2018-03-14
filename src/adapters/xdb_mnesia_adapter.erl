@@ -2,7 +2,7 @@
 %%% @doc
 %%% Mnesia adapter.
 %%%
-%%% Based on SumoDB mnesia adapter `sumo_store_mnesia`
+%%% Based on SumoDB mnesia adapter `sumo_store_mnesia'
 %%% @copyright 2012 Inaka &lt;hello@inaka.net&gt;
 %%% @reference See
 %%% <a href="https://github.com/inaka/sumo_db">SumoDB</a>
@@ -12,6 +12,7 @@
 -module(xdb_mnesia_adapter).
 
 -behaviour(xdb_adapter).
+-behaviour(xdb_adapter_transaction).
 
 -export([
   insert/4,
@@ -19,6 +20,12 @@
   update/5,
   delete/4,
   execute/5
+]).
+
+-export([
+  transaction/3,
+  in_transaction/1,
+  rollback/2
 ]).
 
 %%%===================================================================
@@ -58,29 +65,46 @@ delete(_Repo, #{schema := Schema, source := Source}, Filters, _Opts) ->
 execute(_Repo, Op, #{schema := Schema, source := Source}, Query, _Opts) ->
   do_execute(Op, Schema, Source, Query).
 
+%% @hidden
+transaction(_Repo, Fun, _Opts) ->
+  TxFun =
+    fun() ->
+      case Fun() of
+        {error, Reason} -> xdb_lib:raise(Reason);
+        Ok              -> Ok
+      end
+    end,
+
+  case mnesia:transaction(TxFun) of
+    {aborted, {Error, Reason}} when is_list(Reason) ->
+      {error, Error};
+    {aborted, Reason} ->
+      {error, Reason};
+    {atomic, Result} ->
+      {ok, Result}
+  end.
+
+%% @hidden
+in_transaction(_Repo) ->
+  mnesia:is_transaction().
+
+%% @hidden
+rollback(Repo, Value) ->
+  case in_transaction(Repo) of
+    true  -> error(Value);
+    false -> xdb_exception:no_transaction_is_active()
+  end.
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
 %% @private
 do_insert(Source, PKs, FieldNames, Fields, OnConflict) ->
-  exec_transaction(fun() ->
-    Record = map_to_rec(Source, PKs, FieldNames, Fields),
-
-    Result =
-      case OnConflict of
-        replace ->
-          mnesia:write(Record);
-        nothing ->
-          ok;
-        raise ->
-          Key = pk(PKs, Fields),
-          insert_new(Source, Key, Record)
-      end,
-
-    case Result of
-      ok    -> {ok, Fields};
-      Error -> Error
+  maybe_transaction(fun() ->
+    case on_conflict(Source, PKs, FieldNames, Fields, OnConflict) of
+      {ok, _} -> {ok, Fields};
+      Error   -> Error
     end
   end).
 
@@ -88,21 +112,8 @@ do_insert(Source, PKs, FieldNames, Fields, OnConflict) ->
 do_insert_all(Source, PKs, FieldNames, List, OnConflict) ->
   ReduceFun =
     fun(Fields, Acc) ->
-      Record = map_to_rec(Source, PKs, FieldNames, Fields),
-
-      Result =
-        case OnConflict of
-          replace_all ->
-            mnesia:write(Record);
-          nothing ->
-            ok;
-          raise ->
-            Key = pk(PKs, Fields),
-            insert_new(Source, Key, Record)
-        end,
-
-      case Result of
-        ok ->
+      case on_conflict(Source, PKs, FieldNames, Fields, OnConflict) of
+        {ok, Record} ->
           {cont, [Record | Acc]};
         Error ->
           {halt, Error}
@@ -110,7 +121,7 @@ do_insert_all(Source, PKs, FieldNames, List, OnConflict) ->
     end,
 
   InsertAll =
-    exec_transaction(fun() ->
+    maybe_transaction(fun() ->
       xdb_lib:reduce_while(ReduceFun, [], List)
     end),
 
@@ -122,15 +133,35 @@ do_insert_all(Source, PKs, FieldNames, List, OnConflict) ->
   end.
 
 %% @private
-insert_new(Tab, Key, Record) ->
-  case mnesia:read({Tab, Key}) of
-    [_] -> {error, conflict};
-    []  -> mnesia:write(Record)
+on_conflict(Source, PKs, FieldNames, Fields, OnConflict) ->
+  Record = map_to_rec(Source, PKs, FieldNames, Fields),
+
+  case OnConflict of
+    replace_all ->
+      {mnesia:write(Record), Record};
+    _ ->
+      insert_new(Source, PKs, FieldNames, Fields, OnConflict, Record)
+  end.
+
+%% @private
+insert_new(Source, PKs, FieldNames, Fields, OnConflict, Record) ->
+  case {mnesia:read({Source, pk(PKs, Fields)}), OnConflict} of
+    {[StoredRec], {replace, OnConflictFields}} ->
+      StoredFields = rec_to_map(PKs, FieldNames, StoredRec),
+      UpdatedFields = maps:merge(StoredFields, maps:with(OnConflictFields, Fields)),
+      NewRec = map_to_rec(Source, PKs, FieldNames, UpdatedFields),
+      {mnesia:write(NewRec), NewRec};
+    {[StoredRec], nothing} ->
+      {ok, StoredRec};
+    {[_], raise} ->
+      {error, conflict};
+    {[], _} ->
+      {mnesia:write(Record), Record}
   end.
 
 %% @private
 do_update(Source, PKs, FieldNames, Fields, Filters) ->
-  exec_transaction(fun() ->
+  maybe_transaction(fun() ->
     {true, PkValues} = xdb_query:pk_filter(PKs, Filters),
     Key = pk(xdb_lib:kv_values(PkValues)),
 
@@ -146,7 +177,7 @@ do_update(Source, PKs, FieldNames, Fields, Filters) ->
 
 %% @private
 do_delete(Source, PkValues) ->
-  exec_transaction(fun() ->
+  maybe_transaction(fun() ->
     Key = pk(xdb_lib:kv_values(PkValues)),
 
     case mnesia:read({Source, Key}) of
@@ -189,7 +220,7 @@ do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}) ->
        mnesia:read({Source, pk(xdb_lib:kv_values(PkValues))})
     end,
 
-  Records = exec_transaction(GetTx),
+  Records = maybe_transaction(GetTx),
   {length(Records), to_fields(PKs, FieldNames, Records)};
 
 do_execute(all, Source, PKs, FieldNames, {MatchSpec, Limit, Offset}) ->
@@ -216,7 +247,7 @@ do_execute(all, Source, PKs, FieldNames, {MatchSpec, Limit, Offset}) ->
       _ -> SelectBy
     end,
 
-  Records = exec_transaction(Transaction),
+  Records = maybe_transaction(Transaction),
   {length(Records), to_fields(PKs, FieldNames, Records)};
 
 do_execute(delete_all, Source, _PKs, _FieldNames, all) ->
@@ -236,7 +267,7 @@ do_execute(delete_all, Source, PKs, FieldNames, MatchSpec) ->
       Records
     end,
 
-  Records = exec_transaction(Transaction),
+  Records = maybe_transaction(Transaction),
   {length(Records), to_fields(PKs, FieldNames, Records)};
 
 do_execute(update_all, Source, PKs, FieldNames, {MatchSpec, Updates}) ->
@@ -250,7 +281,7 @@ do_execute(update_all, Source, PKs, FieldNames, {MatchSpec, Updates}) ->
       end || Record <- mnesia:select(Source, MatchSpec)]
     end,
 
-  ResL = exec_transaction(Transaction),
+  ResL = maybe_transaction(Transaction),
   {length(ResL), ResL}.
 
 %% @private
@@ -372,12 +403,12 @@ update_record(Record, Source, PKs, FieldNames, Fields) ->
   {NewRec, NewFields}.
 
 %% @private
-exec_transaction(Transaction) ->
-  exec_transaction(Transaction, fun xdb_lib:raise/1).
+exec_transaction(Fun) ->
+  exec_transaction(Fun, fun xdb_lib:raise/1).
 
 %% @private
-exec_transaction(Transaction, ErrorFun) ->
-  case mnesia:transaction(Transaction) of
+exec_transaction(Fun, ErrorFun) ->
+  case mnesia:transaction(Fun) of
     {aborted, {{_, Reason} = Error, _}} when is_list(Reason) ->
       ErrorFun(Error);
     {aborted, Reason} ->
@@ -385,3 +416,13 @@ exec_transaction(Transaction, ErrorFun) ->
     {atomic, Result} ->
       Result
   end.
+
+%% @private
+maybe_transaction(Fun) ->
+  maybe_transaction(Fun, mnesia:is_transaction()).
+
+%% @private
+maybe_transaction(Fun, true) ->
+  Fun();
+maybe_transaction(Fun, false) ->
+  exec_transaction(Fun).

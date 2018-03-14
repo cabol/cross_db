@@ -10,7 +10,8 @@
   no_primary_key_field_error/1,
   no_primary_key_value_error/2,
   multiple_results_error/2,
-  stale_entry_error/2
+  stale_entry_error/2,
+  no_transaction_is_active/0
 ]).
 
 %%%===================================================================
@@ -41,3 +42,7 @@ multiple_results_error(Queryable, Count) when is_atom(Queryable), is_integer(Cou
 stale_entry_error(Action, Schema) ->
   Text = "attempted to ~p a stale schema: ~p",
   xdb_lib:raise(stale_entry_error, Text, [Action, Schema]).
+
+-spec no_transaction_is_active() -> no_return().
+no_transaction_is_active() ->
+  xdb_lib:raise(no_transaction_is_active, "cannot call rollback outside of transaction").

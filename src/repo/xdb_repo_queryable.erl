@@ -16,7 +16,9 @@
   delete_all/3,
   delete_all/4,
   update_all/4,
-  update_all/5
+  update_all/5,
+  transaction/3,
+  transaction/4
 ]).
 
 %%%===================================================================
@@ -94,6 +96,19 @@ update_all(Repo, Adapter, Queryable, Updates, Opts) when is_atom(Queryable) ->
   execute(update_all, Repo, Adapter, Query#{updates := Updates}, Opts);
 update_all(Repo, Adapter, #{from := _, source := _} = Query, Updates, Opts) ->
   execute(update_all, Repo, Adapter, Query#{updates := Updates}, Opts).
+
+%% @equiv transaction(Repo, Adapter, Fun, [])
+transaction(Repo, Adapter, Fun) ->
+  transaction(Repo, Adapter, Fun, []).
+
+-spec transaction(Repo, Adapter, Fun, Opts) -> Res when
+  Repo    :: xdb_repo:t(),
+  Adapter :: xdb_adapter:t(),
+  Fun     :: fun(() -> any()),
+  Opts    :: xdb_lib:keyword(),
+  Res     :: {ok, any()} | {error, any()}.
+transaction(Repo, Adapter, Fun, Opts) when is_function(Fun, 0) ->
+  Adapter:transaction(Repo, Fun, Opts).
 
 %%%===================================================================
 %%% Internal functions

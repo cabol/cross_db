@@ -6,7 +6,8 @@
 -schema({posts, [
   {id,         integer,  [primary_key]},
   {blog_id,    integer},  % by default the options are []
-  {text,       string},
+  {title,      string},
+  {body,       string},
   {created_at, datetime, [{setter, false}]},
   {updated_at, datetime}
 ]}).
@@ -16,7 +17,7 @@ changeset(Post, Params) ->
   [pipe](
     Post,
     post:schema(_),
-    xdb_changeset:cast(_, Params, [id, blog_id, text, created_at, updated_at]),
-    xdb_changeset:validate_required(_, [id, blog_id, text]),
-    xdb_changeset:validate_length(_, text, [{min, 4}, {max, 256}])
+    xdb_changeset:cast(_, Params, [id, blog_id, title, body, created_at, updated_at]),
+    xdb_changeset:validate_required(_, [id, blog_id, title]),
+    xdb_changeset:validate_length(_, title, [{min, 4}, {max, 256}])
   ).

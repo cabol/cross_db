@@ -2,7 +2,7 @@
 %%% @doc
 %%% SQL Utilities.
 %%%
-%%% Based on SumoDB `sumo_sql_builder`.
+%%% Based on SumoDB `sumo_sql_builder'.
 %%% @copyright 2012 Inaka &lt;hello@inaka.net&gt;
 %%% @reference See
 %%% <a href="https://github.com/inaka/sumo_db">SumoDB</a>
