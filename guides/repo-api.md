@@ -1,22 +1,60 @@
 # Repo API
 
-Defines a repository.
+Defines a repository; it is highly inspired by [Ecto](https://github.com/elixir-ecto/ecto).
 
 A repository maps to an underlying data store, controlled by the adapter.
 For example, CrossDB ships with a `xdb_mnesia_adapter` that stores data into
 Mnesia database.
 
-When used, the repository expects the `otp_app` and `adapter` as options.
-The `otp_app` should point to an OTP application that has the repository
-configuration, and the `adapter` is a compile-time option that specifies
-the adapter itself and should point to an existing and valid module that
-implements the `xdb_adapter` behaviour. For example, the repository:
+When used, the repository expects the `otp_app` as option. The `otp_app`
+should point to an OTP application that has the repository configuration.
+For example, the repository:
 
 ```erlang
 -module(blog_repo).
 
 -include_lib("cross_db/include/xdb.hrl").
--repo([{otp_app, blog}, {adapter, xdb_mnesia_adapter}]).
+-repo([{otp_app, blog}]).
+```
+
+Could be configured with:
+
+```erlang
+[
+  {blog, [
+    {blog_repo, [
+      {adapter, xdb_mnesia_adapter}, % Adapter
+      {ram_copies, local},
+      {schemas, [blog, post]}
+    ]}
+  ]}
+].
+```
+
+Most of the configuration in the config is specific to the adapter, so check
+each adapter documentation for more information. However, some configuration
+is shared across all adapters, such as:
+
+- `adapter` - a compile-time option that specifies the adapter itself.
+  As a compile-time option, it may also be given as an option to repo
+  attribute `-repo([..])`.
+
+> **IMPORTANT:** By default, `cross_db` assumes the config file is
+  `config/sys.config`, if you want to change the name and location
+  you have to add the `{sys_config, "config/sys.config"}` option in
+  the `relx` section within the `rebar.config`.
+
+## Types
+
+```erlang
+-type t() :: module().
+```
+
+```erlang
+%% Write command response (delete, insert and update)
+-type w_respose() :: {ok, xdb_schema:t()}
+                   | {error, xdb_changeset:t()}
+                   | no_return().
 ```
 
 ## init/1

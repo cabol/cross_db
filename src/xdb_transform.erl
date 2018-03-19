@@ -51,89 +51,6 @@ transform(Term) ->
   Term.
 
 %%%===================================================================
-%%% Helpers
-%%%===================================================================
-
-%% @private
-maybe_add_funs(Result) ->
-  case erlang:get(funs) of
-    undefined -> Result;
-    ExtFuns   -> lists:droplast(Result) ++ ExtFuns ++ [lists:last(Result)]
-  end.
-
-%% @private
-build_export() ->
-  build_export(erlang:erase(exports)).
-
-%% @private
-build_export([{FirstFun, FirstArity} | Exports]) ->
-  ?Q(lists:foldl(fun({Fun, Arity}, Acc) ->
-    Acc ++ text(", ~p/~p", [Fun, Arity])
-  end, text("-export([~p/~p", [FirstFun, FirstArity]), Exports) ++ "]).");
-build_export(_) ->
-  ?Q("-export([]).").
-
-%% @private
-add_funs(FunSpecs) ->
-  lists:foreach(fun({Name, Arity, Body}) ->
-    add_fun(Name, Arity, Body)
-  end, FunSpecs).
-
-%% @private
-add_fun(Name, Arity, Body) ->
-  _ = do_put(exports, {Name, Arity}, erlang:get(exports)),
-  do_put(funs, Body, erlang:get(funs)).
-
-%% @private
-do_put(Key, Value, undefined) ->
-  erlang:put(Key, [Value]);
-do_put(Key, Value, CurrentValues) ->
-  erlang:put(Key, [Value | CurrentValues]).
-
-%% @private
-text(Msg, Args) ->
-  lists:flatten(io_lib:format(Msg, Args)).
-
-%% @private
-splicing_args(Arity) when Arity >= 0 ->
-  do_splicing_args(lists:seq(1, Arity)).
-
-%% @private
-do_splicing_args([]) ->
-  "";
-do_splicing_args([H]) ->
-  "A" ++ integer_to_list(H);
-do_splicing_args([H | T]) ->
-  lists:foldl(fun(N, Acc) ->
-    Acc ++ ", A" ++ integer_to_list(N)
-  end, "A" ++ integer_to_list(H), T).
-
-%% @private
-get_value(Key, KVList) ->
-  case lists:keyfind(Key, 1, KVList) of
-    {Key, Value} -> Value;
-    false        -> error({badkey, Key})
-  end.
-
-%% @private
-erlang_type(string) ->
-  "binary()";
-erlang_type(binary) ->
-  "binary()";
-erlang_type(integer) ->
-  "integer()";
-erlang_type(float) ->
-  "float()";
-erlang_type(boolean) ->
-  "boolean()";
-erlang_type(date) ->
-  "calendar:date()";
-erlang_type(datetime) ->
-  "calendar:datetime()";
-erlang_type(custom) ->
-  "any()".
-
-%%%===================================================================
 %%% Schema generators
 %%%===================================================================
 
@@ -222,9 +139,7 @@ setter(Name) ->
 
 %% @private
 build_repo(Opts) ->
-  Repo = erlang:get(module),
-  OtpApp = get_value(otp_app, Opts),
-  Adapter = load_adapter(Opts),
+  {Repo, OtpApp, Adapter} = compile_config(Opts),
 
   RepoFuns = [repo_fun_template(M, F, Arity, Repo, Adapter) || {M, F, Arity} <- repo_api_specs()],
   TxRepoFuns = maybe_transaction_funs(repo_transaction_api_specs(Adapter), Repo, Adapter),
@@ -233,11 +148,45 @@ build_repo(Opts) ->
   add_funs(RepoMetaFuns ++ RepoFuns ++ TxRepoFuns).
 
 %% @private
-load_adapter(Opts) ->
-  Adapter = get_value(adapter, Opts),
+compile_config(Opts) ->
+  Repo = erlang:get(module),
+  OtpApp = get_value(otp_app, Opts),
+  Config = load_config(),
+  Adapter = get_adapter(Repo, OtpApp, Opts, Config),
+
   case code:ensure_loaded(Adapter) of
     {module, Adapter} -> Adapter;
     {error, _What}    -> error({badadapter, Adapter})
+  end,
+
+  {Repo, OtpApp, Adapter}.
+
+%% @private
+load_config() ->
+  Default = "config/sys.config",
+
+  ConfigFile =
+    case file:consult("rebar.config") of
+      {ok, Rebar} ->
+        Relx = get_value(relx, Rebar, []),
+        get_value(sys_config, Relx, Default);
+      {error, _} ->
+        Default
+    end,
+
+  case file:consult(ConfigFile) of
+    {ok, [Config]} -> Config;
+    {error, _}     -> []
+  end.
+
+%% @private
+get_adapter(Repo, OtpApp, Opts, Config) ->
+  case get_value(adapter, Opts, undefined) of
+    undefined ->
+      RepoConfig = get_value(Repo, get_value(OtpApp, Config, []), []),
+      get_value(adapter, RepoConfig);
+    Adapter ->
+      Adapter
   end.
 
 %% @private
@@ -323,3 +272,93 @@ maybe_transaction_funs(Specs, Repo, Adapter) ->
     false ->
       []
   end.
+
+%%%===================================================================
+%%% Helpers
+%%%===================================================================
+
+%% @private
+maybe_add_funs(Result) ->
+  case erlang:get(funs) of
+    undefined -> Result;
+    ExtFuns   -> lists:droplast(Result) ++ ExtFuns ++ [lists:last(Result)]
+  end.
+
+%% @private
+build_export() ->
+  build_export(erlang:erase(exports)).
+
+%% @private
+build_export([{FirstFun, FirstArity} | Exports]) ->
+  ?Q(lists:foldl(fun({Fun, Arity}, Acc) ->
+    Acc ++ text(", ~p/~p", [Fun, Arity])
+  end, text("-export([~p/~p", [FirstFun, FirstArity]), Exports) ++ "]).");
+build_export(_) ->
+  ?Q("-export([]).").
+
+%% @private
+add_funs(FunSpecs) ->
+  lists:foreach(fun({Name, Arity, Body}) ->
+    add_fun(Name, Arity, Body)
+  end, FunSpecs).
+
+%% @private
+add_fun(Name, Arity, Body) ->
+  _ = do_put(exports, {Name, Arity}, erlang:get(exports)),
+  do_put(funs, Body, erlang:get(funs)).
+
+%% @private
+do_put(Key, Value, undefined) ->
+  erlang:put(Key, [Value]);
+do_put(Key, Value, CurrentValues) ->
+  erlang:put(Key, [Value | CurrentValues]).
+
+%% @private
+text(Msg, Args) ->
+  lists:flatten(io_lib:format(Msg, Args)).
+
+%% @private
+splicing_args(Arity) when Arity >= 0 ->
+  do_splicing_args(lists:seq(1, Arity)).
+
+%% @private
+do_splicing_args([]) ->
+  "";
+do_splicing_args([H]) ->
+  "A" ++ integer_to_list(H);
+do_splicing_args([H | T]) ->
+  lists:foldl(fun(N, Acc) ->
+    Acc ++ ", A" ++ integer_to_list(N)
+  end, "A" ++ integer_to_list(H), T).
+
+%% @private
+get_value(Key, KVList) ->
+  case lists:keyfind(Key, 1, KVList) of
+    {Key, Value} -> Value;
+    false        -> error({badkey, Key})
+  end.
+
+%% @private
+get_value(Key, KVList, Default) ->
+  case lists:keyfind(Key, 1, KVList) of
+    {Key, Value} -> Value;
+    false        -> Default
+  end.
+
+%% @private
+erlang_type(string) ->
+  "binary() | undefined";
+erlang_type(binary) ->
+  "binary() | undefined";
+erlang_type(integer) ->
+  "integer() | undefined";
+erlang_type(float) ->
+  "float() | undefined";
+erlang_type(boolean) ->
+  "boolean() | undefined";
+erlang_type(date) ->
+  "calendar:date() | undefined";
+erlang_type(datetime) ->
+  "calendar:datetime() | undefined";
+erlang_type(custom) ->
+  "any() | undefined".

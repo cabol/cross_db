@@ -277,8 +277,15 @@ t_all(Config) ->
     1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Turing">>},
     2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
     3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
-  } = All = person:list_to_map(Repo:all(person)),
-  3 = maps:size(All),
+  } = All1 = person:list_to_map(Repo:all(person)),
+  3 = maps:size(All1),
+
+  Query = xdb_query:from(person, [{select, [id, first_name]}, {where, [{age, '>', 40}]}]),
+  #{
+    1 := #{first_name := <<"Alan">>, last_name := undefined},
+    2 := #{first_name := <<"Charles">>, last_name := undefined}
+  } = All2 = person:list_to_map(Repo:all(Query)),
+  2 = maps:size(All2),
   ok.
 
 -spec t_all_with_pagination(xdb_ct:config()) -> ok.
@@ -310,8 +317,8 @@ t_all_with_pagination(Config) ->
   #{
     1 := #{first_name := <<"Alan">>, last_name := <<"Turing">>},
     2 := #{first_name := <<"Charles">>, last_name := <<"Darwin">>}
-  } = All = person:list_to_map(Repo:all(Query2, [{limit, 10}, {offset, 0}])),
-  2 = maps:size(All),
+  } = All1 = person:list_to_map(Repo:all(Query2)),
+  2 = maps:size(All1),
   ok.
 
 -spec t_delete_all(xdb_ct:config()) -> ok.

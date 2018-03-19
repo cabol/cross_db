@@ -18,7 +18,7 @@ To add `cross_db` to this application, there are a few steps that we need to
 take.
 
 The first step will be adding `cross_db` to our `*.config` file (e.g.:
-`config/dev.config`), along with other extra deps used only in this example.
+`config/sys.config`), along with other extra deps used only in this example.
 The config file might looks like this:
 
 ```erlang
@@ -43,7 +43,7 @@ The config file might looks like this:
 %% Start the app when we run the shell
 {shell, [
   {apps, [blog]},
-  {config, ["config/dev.config"]}
+  {config, ["config/sys.config"]}
 ]}.
 ```
 
@@ -59,10 +59,11 @@ Let's create our `blog_repo` module:
 -module(blog_repo).
 
 -include_lib("cross_db/include/xdb.hrl").
--repo([{otp_app, blog}, {adapter, xdb_mnesia_adapter}]).
+-repo([{otp_app, blog}]).
 ```
 
-> In this case we are going to use the `mnesia` build-in adapter.
+> The adapter will be set in the config, in this case we are going to use
+  the `mnesia` build-in adapter.
 
 Mnesia adapter comes along with a default repo that implements the `init/1`
 callback, which creates the tables for us, but only works local (single-node).
@@ -72,7 +73,7 @@ So let's edit the `blog_repo` module in order to inherit the `init/1` callback:
 -module(blog_repo).
 
 -include_lib("cross_db/include/xdb.hrl").
--repo([{otp_app, blog}, {adapter, xdb_mnesia_adapter}]).
+-repo([{otp_app, blog}]).
 
 %% Inherit the default repo `init/1` callback from `xdb_mnesia_boot_repo`
 -include_lib("mixer/include/mixer.hrl").
@@ -80,18 +81,24 @@ So let's edit the `blog_repo` module in order to inherit the `init/1` callback:
 ```
 
 Then let's add some configuration to our repo within the config file
-(e.g.: `config/dev.config`):
+(e.g.: `config/sys.config`):
 
 ```erlang
 [
   {blog, [
     {blog_repo, [
+      {adapter, xdb_mnesia_adapter},
       {ram_copies, local},
       {schemas, []}
     ]}
   ]}
 ].
 ```
+
+> **IMPORTANT:** By default, `cross_db` assumes the config file is
+  `config/sys.config`, if you want to change the name and location
+  you have to add the `{sys_config, "config/sys.config"}` option in
+  the `relx` section within the `rebar.config`.
 
 The final piece of configuration is to setup the `blog_repo` as a supervisor
 within the application's supervision tree, which we can do in
@@ -146,7 +153,7 @@ Then a second model `post`:
 ]}).
 ```
 
-And before to compile the code we need to edit our `config/dev.config` file in
+And before to compile the code we need to edit our `config/sys.config` file in
 order to add the created schemas and let `mnesia` adapter create the tables
 for us, like so:
 
@@ -154,6 +161,7 @@ for us, like so:
 [
   {blog, [
     {blog_repo, [
+      {adapter, xdb_mnesia_adapter},
       {ram_copies, local},
       {schemas, [blog, post]}
     ]}

@@ -79,7 +79,7 @@ t_missing_repo_config(_Config) ->
 
 -spec t_no_repo_init_fun(xdb_ct:config()) -> ok.
 t_no_repo_init_fun(_Config) ->
-  _ = xdb_repo_sup:start_link(xdb_test_repo_adapter, cross_db, xdb_test_repo_adapter, []),
+  _ = xdb_repo_sup:start_link(xdb_test_repo_and_adapter, cross_db, xdb_test_repo_and_adapter, []),
   ok.
 
 -spec t_sup_spec(xdb_ct:config()) -> ok.

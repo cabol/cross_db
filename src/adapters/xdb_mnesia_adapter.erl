@@ -190,17 +190,17 @@ do_delete(Source, PkValues) ->
   end).
 
 %% @private
-do_execute(Op, Schema, Source, #{raw := MatchSpec, limit := Limit, offset := Offset}) ->
+do_execute(Op, Schema, Source, #{raw := MatchSpec} = Query) ->
   {PKs, FieldNames} = get_meta(Schema),
-  do_execute(Op, Source, PKs, FieldNames, {MatchSpec, Limit, Offset});
-do_execute(all, Schema, Source, #{where := Conditions, limit := Limit, offset := Offset}) ->
+  do_execute(Op, Source, PKs, FieldNames, {MatchSpec, Query});
+do_execute(all, Schema, Source, #{where := Conditions} = Query) ->
   {PKs, FieldNames} = get_meta(Schema),
   case xdb_query:pk_filter(PKs, Conditions) of
     {true, PkValues} ->
       do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues});
     _ ->
       MatchSpec = build_match_spec(Source, FieldNames, Conditions),
-      do_execute(all, Source, PKs, FieldNames, {MatchSpec, Limit, Offset})
+      do_execute(all, Source, PKs, FieldNames, {MatchSpec, Query})
   end;
 do_execute(delete_all, _Schema, Source, #{where := []}) ->
   do_execute(delete_all, Source, undefined, undefined, all);
@@ -223,7 +223,9 @@ do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}) ->
   Records = maybe_transaction(GetTx),
   {length(Records), to_fields(PKs, FieldNames, Records)};
 
-do_execute(all, Source, PKs, FieldNames, {MatchSpec, Limit, Offset}) ->
+do_execute(all, Source, PKs, FieldNames, {MatchSpec, Query}) ->
+  #{select := Select, limit := Limit, offset := Offset} = Query,
+
   SelectAll =
     fun() ->
       mnesia:select(Source, MatchSpec)
@@ -248,7 +250,7 @@ do_execute(all, Source, PKs, FieldNames, {MatchSpec, Limit, Offset}) ->
     end,
 
   Records = maybe_transaction(Transaction),
-  {length(Records), to_fields(PKs, FieldNames, Records)};
+  {length(Records), to_fields(PKs, FieldNames, Select, Records)};
 
 do_execute(delete_all, Source, _PKs, _FieldNames, all) ->
   Count = mnesia:table_info(Source, size),
@@ -380,7 +382,13 @@ pk(PKs, Fields) ->
 
 %% @private
 to_fields(PKs, FieldNames, Records) when is_list(Records) ->
-  [rec_to_map(PKs, FieldNames, Record) || Record <- Records].
+  to_fields(PKs, FieldNames, [], Records).
+
+%% @private
+to_fields(PKs, FieldNames, [], Records) when is_list(Records) ->
+  [rec_to_map(PKs, FieldNames, Record) || Record <- Records];
+to_fields(PKs, FieldNames, Filter, Records) when is_list(Records) ->
+  [maps:with(Filter, rec_to_map(PKs, FieldNames, Record)) || Record <- Records].
 
 %% @private
 rec_to_map(PKs, FieldNames, Record) ->

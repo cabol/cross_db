@@ -1,4 +1,4 @@
--module(xdb_test_repo_adapter).
+-module(xdb_test_repo_and_adapter).
 
 -export([
   child_spec/2,
