@@ -92,7 +92,7 @@
 %%% API
 %%%===================================================================
 
--optional_callbacks([in_transaction/0, rollback/1, transaction/2]).
+-optional_callbacks([init/1, in_transaction/0, rollback/1, transaction/2]).
 
 -callback init(Config) -> Res when
   Config :: xdb_lib:keyword(),
