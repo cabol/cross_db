@@ -1,4 +1,5 @@
 # CrossDB
+[![Build Status](https://travis-ci.org/cabol/cross_db.svg?branch=master)](https://travis-ci.org/cabol/cross_db)
 > ## Simple and flexible database wrapper for Erlang
 > **Still in development stage!**
 
