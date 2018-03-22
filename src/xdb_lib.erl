@@ -156,5 +156,5 @@ raise(Error, Reason) when is_atom(Error) ->
 
 -spec raise(atom(), string(), [any()]) -> no_return().
 raise(Error, Text, Args) when is_atom(Error) ->
-  Reason = xdb_lib:stringify(Text, Args),
+  Reason = stringify(Text, Args),
   erlang:raise(error, {Error, Reason}, erlang:get_stacktrace()).

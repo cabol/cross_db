@@ -80,10 +80,16 @@ s_count(Table, SelectFields, Conditions, ExtraWhere) ->
   OrderBy      :: string(),
   Res          :: {iolist(), [term()]}.
 s(Table, SelectFields, Conditions, ExtraWhere, Page, PageSize, OrderBy) ->
-  Paging = [
-    " LIMIT ", integer_to_list((Page - 1) * PageSize), ", ",
-    integer_to_list(PageSize)
-  ],
+  Paging =
+    case PageSize of
+      0 ->
+        [];
+      _ ->
+        [
+          " LIMIT ", integer_to_list((Page - 1) * PageSize), ", ",
+          integer_to_list(PageSize)
+        ]
+    end,
 
   {Select, Where, Values} = form_select_query(SelectFields, Conditions, ExtraWhere),
 
@@ -265,7 +271,14 @@ slot_numbered({_, N}) ->
 form_select_query(SelectFields, Conditions, ExtraWhere) ->
   {Values, CleanConditions} = parse_conditions([Conditions]),
   WhereTmp = where_clause(CleanConditions),
-  SFields = [escape(F) || F <- SelectFields],
+
+  SFields =
+    case SelectFields of
+      [] ->
+        ["*"];
+      _ ->
+        [escape(F) || F <- SelectFields]
+    end,
 
   Where =
     case ExtraWhere of
