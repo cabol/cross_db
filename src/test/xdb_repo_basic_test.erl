@@ -72,10 +72,6 @@ t_insert_errors(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
 
   ok = assert_error(fun() ->
-    Repo:insert(account:schema(#{id => 1, username => "cabol"}))
-  end, {no_exists, account}),
-
-  ok = assert_error(fun() ->
     Repo:insert(person:schema(#{}))
   end, no_primary_key_value_error),
 
@@ -134,10 +130,10 @@ t_insert_all(Config) ->
     #{id => 3, first_name => "Alan", last_name => "Poe", age => 40}
   ],
 
-  {3, [_, _, _ ]} = Repo:insert_all(person, People),
+  {3, _} = Repo:insert_all(person, People),
 
   ok = lists:foreach(fun(_) ->
-    {3, [_, _, _ ]} = Repo:insert_all(person, People, [{on_conflict, nothing}])
+    {3, _} = Repo:insert_all(person, People, [{on_conflict, nothing}])
   end, lists:seq(1, 3)),
 
   #{
@@ -146,10 +142,7 @@ t_insert_all(Config) ->
     3 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Poe">>}
   } = All1 = person:list_to_map(Repo:all(person)),
   3 = maps:size(All1),
-
-  ok = assert_error(fun() ->
-    Repo:insert_all(account, [#{id => 1, username => "cabol"}])
-  end, {no_exists, account}).
+  ok.
 
 -spec t_insert_all_on_conflict(xdb_ct:config()) -> ok.
 t_insert_all_on_conflict(Config) ->
@@ -331,8 +324,7 @@ t_delete_all(Config) ->
 
   {3, undefined} = Repo:delete_all(person),
   [] = Repo:all(person),
-
-  ok = assert_error(fun() -> Repo:delete_all(account) end, {no_exists, account}).
+  ok.
 
 -spec t_delete_all_with_conditions(xdb_ct:config()) -> ok.
 t_delete_all_with_conditions(Config) ->
@@ -351,7 +343,7 @@ t_delete_all_with_conditions(Config) ->
         ]}
       ]}
     ]),
-  {1, [_]} = Repo:delete_all(Query1),
+  {1, _} = Repo:delete_all(Query1),
 
   #{
     2 := #{'__meta__' := _, first_name := <<"Charles">>, last_name := <<"Darwin">>},
@@ -374,7 +366,7 @@ t_update_all(Config) ->
   } = All1 = person:list_to_map(Repo:all(person)),
   3 = maps:size(All1),
 
-  {3, [_, _, _]} = Repo:update_all(person, [{last_name, <<"Other">>}]),
+  {3, _} = Repo:update_all(person, [{last_name, <<"Other">>}]),
 
   #{
     1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Other">>},
@@ -407,7 +399,7 @@ t_update_all_with_conditions(Config) ->
         ]}
       ]}
     ]),
-  {1, [_]} = Repo:update_all(Query1, [{last_name, <<"Other">>}]),
+  {1, _} = Repo:update_all(Query1, [{last_name, <<"Other">>}]),
 
   #{
     1 := #{'__meta__' := _, first_name := <<"Alan">>, last_name := <<"Other">>},

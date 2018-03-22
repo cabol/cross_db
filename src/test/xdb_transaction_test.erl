@@ -120,7 +120,7 @@ t_transaction_error(Config) ->
 
   [_] = Repo:all(person),
 
-  {error, {no_exists, account}} =
+  {error, _} =
     Repo:transaction(fun() ->
       {ok, #{id := 2}} =
         Repo:insert(person:schema(#{

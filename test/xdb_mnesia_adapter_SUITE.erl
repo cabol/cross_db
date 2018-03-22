@@ -11,7 +11,8 @@
 -export([
   t_all_with_different_table_types/1,
   t_raw_query/1,
-  t_boot_repo_options/1
+  t_boot_repo_options/1,
+  t_unexisting_schema_error/1
 ]).
 
 %% Test Cases
@@ -40,6 +41,8 @@
     t_update_all_with_conditions/1
   ]}
 ]).
+
+-import(xdb_ct, [assert_error/2]).
 
 -define(EXCLUDED_FUNS, [
   module_info,
@@ -120,3 +123,15 @@ t_boot_repo_options(_Config) ->
   catch
     _:_ -> ok
   end.
+
+-spec t_unexisting_schema_error(xdb_ct:config()) -> ok.
+t_unexisting_schema_error(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  ok = assert_error(fun() ->
+    Repo:insert(account:schema(#{id => 1, username => "cabol"}))
+  end, {no_exists, account}),
+
+  ok = assert_error(fun() ->
+    Repo:delete_all(account)
+  end, {no_exists, account}).
