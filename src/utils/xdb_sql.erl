@@ -45,7 +45,8 @@
 -type field()     :: atom() | string().
 -type condition() :: {'and', [condition()]}
                    | {'or', [condition()]}
-                   | {field(), term()}.
+                   | {field(), term()}
+                   | list().
 
 -define(logical_op(Op_), Op_ == 'and'; Op_ == 'or'; Op_ == 'not').
 -define(null_value(V_), V_ =/= 'null', V_ =/= 'not_null').
@@ -61,6 +62,11 @@
   Conditions   :: condition(),
   ExtraWhere   :: string(),
   Res          :: {iolist(), [term()]}.
+s_count(Table, _SelectFields, [], _ExtraWhere) ->
+  {
+    ["SELECT COUNT(1) AS `count` FROM ", escape(Table)],
+    []
+  };
 s_count(Table, SelectFields, Conditions, ExtraWhere) ->
   {_Select, Where, Values} = form_select_query(SelectFields, Conditions, ExtraWhere),
 
@@ -93,14 +99,26 @@ s(Table, SelectFields, Conditions, ExtraWhere, Page, PageSize, OrderBy) ->
 
   {Select, Where, Values} = form_select_query(SelectFields, Conditions, ExtraWhere),
 
-  {
-    [
-      "SELECT ", Select,
-      " FROM ", escape(Table),
-      " WHERE ", Where, " ", OrderBy, " ", Paging
-    ],
-    Values
-  }.
+  case Where of
+    [] ->
+      {
+        [
+          "SELECT ", Select,
+          " FROM ", escape(Table),
+          " ", OrderBy, " ", Paging
+        ],
+        Values
+      };
+    _ ->
+      {
+        [
+          "SELECT ", Select,
+          " FROM ", escape(Table),
+          " WHERE ", Where, " ", OrderBy, " ", Paging
+        ],
+        Values
+      }
+  end.
 
 %% @doc INSERT.
 -spec i(Table, PropList) -> Res when
@@ -137,17 +155,29 @@ u(Table, UpdateFields, Conditions) ->
 
   Update = string:join(UFields, ","),
 
-  {
-    ["UPDATE ", escape(Table), " SET ", Update, " WHERE ", Where],
-     UValues,
-     WValues
-  }.
+  case Where of
+    [] ->
+      {
+        ["UPDATE ", escape(Table), " SET ", Update],
+         UValues,
+         WValues
+      };
+    _ ->
+      {
+        ["UPDATE ", escape(Table), " SET ", Update, " WHERE ", Where],
+         UValues,
+         WValues
+      }
+  end.
+
 
 %% @doc DELETE.
 -spec d(Table, Conditions) -> Res when
   Table      :: tab_name(),
   Conditions :: condition(),
   Res        :: {iolist(), [term()]}.
+d(Table, []) ->
+  {["DELETE FROM ", escape(Table)], []};
 d(Table, Conditions) ->
   {_Select, Where, WValues} = form_select_query([], Conditions, ""),
   {["DELETE FROM ", escape(Table), " WHERE ", Where], WValues}.
