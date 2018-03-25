@@ -14,9 +14,12 @@
 %% Basic SQL builder
 -export([
   i/2,
+  i_all/2,
   u/3,
+  d/1,
   d/2,
   s/7,
+  s_count/3,
   s_count/4
 ]).
 
@@ -45,8 +48,7 @@
 -type field()     :: atom() | string().
 -type condition() :: {'and', [condition()]}
                    | {'or', [condition()]}
-                   | {field(), term()}
-                   | list().
+                   | {field(), term()}.
 
 -define(logical_op(Op_), Op_ == 'and'; Op_ == 'or'; Op_ == 'not').
 -define(null_value(V_), V_ =/= 'null', V_ =/= 'not_null').
@@ -56,17 +58,24 @@
 %%%===================================================================
 
 %% @doc Returns number of results, useful for pagination.
+-spec s_count(Table, SelectFields, ExtraWhere) -> Res when
+  Table        :: tab_name(),
+  SelectFields :: [field()],
+  ExtraWhere   :: string(),
+  Res          :: {iolist(), [term()]}.
+s_count(Table, _SelectFields, _ExtraWhere) ->
+  {
+    ["SELECT COUNT(1) AS `count` FROM ", escape(Table)],
+    []
+  }.
+
+%% @doc Returns number of results, useful for pagination.
 -spec s_count(Table, SelectFields, Conditions, ExtraWhere) -> Res when
   Table        :: tab_name(),
   SelectFields :: [field()],
   Conditions   :: condition(),
   ExtraWhere   :: string(),
   Res          :: {iolist(), [term()]}.
-s_count(Table, _SelectFields, [], _ExtraWhere) ->
-  {
-    ["SELECT COUNT(1) AS `count` FROM ", escape(Table)],
-    []
-  };
 s_count(Table, SelectFields, Conditions, ExtraWhere) ->
   {_Select, Where, Values} = form_select_query(SelectFields, Conditions, ExtraWhere),
 
@@ -92,7 +101,7 @@ s(Table, SelectFields, Conditions, ExtraWhere, Page, PageSize, OrderBy) ->
         [];
       _ ->
         [
-          " LIMIT ", integer_to_list((Page - 1) * PageSize), ", ",
+          " LIMIT ", integer_to_list(Page), ", ",
           integer_to_list(PageSize)
         ]
     end,
@@ -139,6 +148,20 @@ i(Table, PropList) ->
     Values
   }.
 
+-spec i_all(SchemaMeta, PropList) -> Res when
+  SchemaMeta :: xdb_adapter:schema_meta(),
+  PropList   :: proplists:proplist(),
+  Res        :: {iodata(), [term()]}.
+i_all(#{schema := Schema, source := Table}, PropList) ->
+  {Fields, Values, Args} = form_insert_query(Schema, PropList, {[], [], []}),
+  {
+    [
+     "INSERT INTO ", escape(Table), " (", string:join(Fields, ", "), ") VALUES ",
+     get_args(Args, "")
+    ],
+    get_values(Values, [])
+  }.
+
 %% @doc UPDATE.
 -spec u(Table, UpdateFields, Conditions) -> Res when
   Table        :: tab_name(),
@@ -170,14 +193,18 @@ u(Table, UpdateFields, Conditions) ->
       }
   end.
 
+%% @doc DELETE.
+-spec d(Table) -> Res when
+  Table :: tab_name(),
+  Res   :: {iolist(), [term()]}.
+d(Table) ->
+  {["DELETE FROM ", escape(Table)], []}.
 
 %% @doc DELETE.
 -spec d(Table, Conditions) -> Res when
   Table      :: tab_name(),
   Conditions :: condition(),
   Res        :: {iolist(), [term()]}.
-d(Table, []) ->
-  {["DELETE FROM ", escape(Table)], []};
 d(Table, Conditions) ->
   {_Select, Where, WValues} = form_select_query([], Conditions, ""),
   {["DELETE FROM ", escape(Table), " WHERE ", Where], WValues}.
@@ -322,6 +349,18 @@ form_select_query(SelectFields, Conditions, ExtraWhere) ->
   {Select, Where, Values}.
 
 %% @private
+form_insert_query(_Schema, [], {Fields, Values, Args}) ->
+  {Fields, Values, Args};
+form_insert_query(Schema, [PropList0 | Remaining], {_F0, V0, A0}) ->
+  {_PKs, FieldNames} = get_meta(Schema),
+  PropList = maps:to_list(maps:merge(maps:from_list([{K , null} || K <- FieldNames]), PropList0)),
+  {Fields, Values, Args} =
+    lists:foldr(fun({K, V}, {Fs, Vs, Args}) ->
+      {[escape(K) | Fs], [V | Vs], ["?" | Args]}
+    end, {[], [], []}, PropList),
+  form_insert_query(Schema, Remaining, {Fields, [Values] ++ V0, [Args] ++ A0}).
+
+%% @private
 interpose(Sep, List) ->
   interpose(Sep, List, []).
 
@@ -338,3 +377,23 @@ operator_to_string('=<') -> "<=";
 operator_to_string('/=') -> "!=";
 operator_to_string('==') -> "=";
 operator_to_string(Op)   -> atom_to_list(Op).
+
+%% @private
+get_args([], Result) ->
+  string:slice(Result, 0, string:length(Result) - 2);
+get_args([Arg| Remaining], Result) ->
+  Result0 = "(" ++ string:join(Arg, ", ") ++ "), ",
+  get_args(Remaining, Result ++ Result0).
+
+%% @private
+get_values([], Result) ->
+  Result;
+get_values([Value | Remaining], Result) ->
+  get_values(Remaining, Value ++ Result).
+
+%% @private
+get_meta(Schema) ->
+  SchemaSpec = Schema:schema_spec(),
+  PKFieldNames = xdb_schema_spec:pk_field_names(SchemaSpec),
+  FieldNames = xdb_schema_spec:field_names(SchemaSpec),
+  {PKFieldNames, FieldNames}.
