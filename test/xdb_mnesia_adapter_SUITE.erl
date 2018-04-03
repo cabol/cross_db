@@ -12,7 +12,8 @@
   t_all_with_different_table_types/1,
   t_raw_query/1,
   t_boot_repo_options/1,
-  t_unexisting_schema_error/1
+  t_unexisting_schema_error/1,
+  t_insert_no_primary_key_value_error/1
 ]).
 
 %% Test Cases
@@ -135,3 +136,11 @@ t_unexisting_schema_error(Config) ->
   ok = assert_error(fun() ->
     Repo:delete_all(account)
   end, {no_exists, account}).
+
+-spec t_insert_no_primary_key_value_error(xdb_ct:config()) -> ok.
+t_insert_no_primary_key_value_error(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  ok = assert_error(fun() ->
+    Repo:insert(person:schema(#{}))
+  end, no_primary_key_value_error).

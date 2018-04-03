@@ -193,8 +193,9 @@ do_delete(Source, PkValues) ->
 do_execute(Op, Schema, Source, #{raw := MatchSpec} = Query) ->
   {PKs, FieldNames} = get_meta(Schema),
   do_execute(Op, Source, PKs, FieldNames, {MatchSpec, Query});
-do_execute(all, Schema, Source, #{where := Conditions} = Query) ->
+do_execute(all, Schema, Source, Query) ->
   {PKs, FieldNames} = get_meta(Schema),
+  Conditions = maps:get(where, Query, []),
   case xdb_query:pk_filter(PKs, Conditions) of
     {true, PkValues} ->
       do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues});
@@ -202,14 +203,16 @@ do_execute(all, Schema, Source, #{where := Conditions} = Query) ->
       MatchSpec = build_match_spec(Source, FieldNames, Conditions),
       do_execute(all, Source, PKs, FieldNames, {MatchSpec, Query})
   end;
-do_execute(delete_all, _Schema, Source, #{where := []}) ->
-  do_execute(delete_all, Source, undefined, undefined, all);
-do_execute(Op, Schema, Source, #{where := Conditions, updates := Updates}) ->
+do_execute(Op, Schema, Source, Query) ->
   {PKs, FieldNames} = get_meta(Schema),
+  Conditions = maps:get(where, Query, []),
+  Updates = maps:get(updates, Query, []),
   MatchSpec = build_match_spec(Source, FieldNames, Conditions),
   case Op of
     update_all ->
       do_execute(Op, Source, PKs, FieldNames, {MatchSpec, Updates});
+    delete_all when length(Conditions) =< 0 ->
+      do_execute(Op, Source, undefined, undefined, all);
     _ ->
       do_execute(Op, Source, PKs, FieldNames, MatchSpec)
   end.
@@ -224,7 +227,9 @@ do_execute(all, Source, PKs, FieldNames, {pk_query, PkValues}) ->
   {length(Records), to_fields(PKs, FieldNames, Records)};
 
 do_execute(all, Source, PKs, FieldNames, {MatchSpec, Query}) ->
-  #{select := Select, limit := Limit, offset := Offset} = Query,
+  Select = maps:get(select, Query, []),
+  Limit = maps:get(limit, Query, 0),
+  Offset = maps:get(offset, Query, 0),
 
   SelectAll =
     fun() ->

@@ -2,7 +2,9 @@
 
 %% Common Test
 -export([
-  all/0
+  all/0,
+  init_per_suite/1,
+  end_per_suite/1
 ]).
 
 %% Test Cases
@@ -11,11 +13,17 @@
   t_get_set_fields/1
 ]).
 
+%% Test Cases
+-include_lib("mixer/include/mixer.hrl").
+-mixin([xdb_schema_test]).
+
 -import(xdb_ct, [assert_error/2]).
 
 -define(EXCLUDED_FUNS, [
   module_info,
-  all
+  all,
+  init_per_suite,
+  end_per_suite
 ]).
 
 %%%===================================================================
@@ -26,6 +34,14 @@
 all() ->
   Exports = ?MODULE:module_info(exports),
   [F || {F, _} <- Exports, not lists:member(F, ?EXCLUDED_FUNS)].
+
+-spec init_per_suite(xdb_ct:config()) -> xdb_ct:config().
+init_per_suite(Config) ->
+  [{schema, person} | Config].
+
+-spec end_per_suite(xdb_ct:config()) -> ok.
+end_per_suite(_Config) ->
+  ok.
 
 %%%===================================================================
 %%% Test Cases

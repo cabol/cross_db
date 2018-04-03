@@ -71,10 +71,6 @@ t_insert(Config) ->
 t_insert_errors(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
 
-  ok = assert_error(fun() ->
-    Repo:insert(person:schema(#{}))
-  end, no_primary_key_value_error),
-
   {error, CS} =
     xdb_ct:pipe(#{id => 1}, [
       {fun person:schema/1, []},
@@ -289,12 +285,12 @@ t_all_with_pagination(Config) ->
   Expected = person:list_to_map(Repo:all(person)),
   Query = xdb_query:from(person),
 
-  [P1] = Repo:all(Query#{limit := 1, offset := 0}),
-  [P2] = Repo:all(Query#{limit := 1, offset := 1}),
-  [P3] = Repo:all(Query#{limit := 1, offset := 2}),
-  [P2, P3] = Repo:all(Query#{limit := 2, offset := 1}),
-  [] = Repo:all(Query#{limit := 1, offset := 3}),
-  [] = Repo:all(Query#{limit := 10, offset := 4}),
+  [P1] = Repo:all(Query#{limit => 1, offset => 0}),
+  [P2] = Repo:all(Query#{limit => 1, offset => 1}),
+  [P3] = Repo:all(Query#{limit => 1, offset => 2}),
+  [P2, P3] = Repo:all(Query#{limit => 2, offset => 1}),
+  [] = Repo:all(Query#{limit => 1, offset => 3}),
+  [] = Repo:all(Query#{limit => 10, offset => 4}),
 
   Expected = person:list_to_map([P1, P2, P3]),
 

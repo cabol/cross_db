@@ -98,6 +98,11 @@
   Config :: xdb_lib:keyword(),
   Res    :: {ok, xdb_lib:keyword()} | ignore.
 
+-callback all(Queryable, Opts) -> Res when
+  Queryable :: xdb_query:t() | xdb_query:queryable(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: [xdb_schema:t()] | no_return().
+
 -callback get(Queryable, Id, Opts) -> Res when
   Queryable :: xdb_query:queryable(),
   Id        :: any(),
@@ -109,11 +114,6 @@
   Clauses   :: xdb_lib:keyword(),
   Opts      :: xdb_lib:keyword(),
   Res       :: xdb_schema:t() | undefined | no_return().
-
--callback all(Queryable, Opts) -> Res when
-  Queryable :: xdb_query:t() | xdb_query:queryable(),
-  Opts      :: xdb_lib:keyword(),
-  Res       :: [xdb_schema:t()] | no_return().
 
 -callback insert(Schema, Opts) -> Res when
   Schema :: xdb_schema:t(),

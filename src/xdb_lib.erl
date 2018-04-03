@@ -28,12 +28,14 @@
 %%% Common Types
 %%%===================================================================
 
--type keyword() :: [{atom(), any()}].
+-type kwentry() :: {atom(), any()}.
+-type keyword() :: [kwentry()].
 -type kw_map()  :: #{atom()  => any()}.
 -type kv()      :: keyword() | kw_map().
 -type kvlist()  :: [{any(), any()}].
 
 -export_type([
+  kwentry/0,
   keyword/0,
   kw_map/0,
   kv/0,

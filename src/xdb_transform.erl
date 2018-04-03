@@ -102,7 +102,7 @@ process_field(Name, Type, Opts) ->
 %% @private
 schema() ->
   Module = erlang:get(module),
-  New0 = ?Q(text("schema() -> xdb_schema:new(~p, #{}).", [Module])),
+  New0 = ?Q("schema() -> schema(#{})."),
   New1 = ?Q(text("schema(Params) -> xdb_schema:new(~p, Params).", [Module])),
   [{schema, 0, New0}, {schema, 1, New1}].
 

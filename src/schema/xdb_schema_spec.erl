@@ -58,6 +58,7 @@
 
 %% Exported types
 -export_type([
+  field_type/0,
   field/0,
   fields/0,
   t/0

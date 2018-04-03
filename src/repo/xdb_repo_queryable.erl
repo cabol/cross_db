@@ -93,9 +93,9 @@ update_all(Repo, Adapter, Queryable, Updates) ->
   Res       :: {integer(), [any()]} | no_return().
 update_all(Repo, Adapter, Queryable, Updates, Opts) when is_atom(Queryable) ->
   Query = xdb_query:from(Queryable),
-  execute(update_all, Repo, Adapter, Query#{updates := Updates}, Opts);
+  execute(update_all, Repo, Adapter, Query#{updates => Updates}, Opts);
 update_all(Repo, Adapter, #{from := _, source := _} = Query, Updates, Opts) ->
-  execute(update_all, Repo, Adapter, Query#{updates := Updates}, Opts).
+  execute(update_all, Repo, Adapter, Query#{updates => Updates}, Opts).
 
 %% @equiv transaction(Repo, Adapter, Fun, [])
 transaction(Repo, Adapter, Fun) ->
