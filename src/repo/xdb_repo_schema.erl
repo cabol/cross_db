@@ -11,10 +11,16 @@
   insert_all/5,
   insert/3,
   insert/4,
+  insert_or_raise/3,
+  insert_or_raise/4,
   update/3,
   update/4,
+  update_or_raise/3,
+  update_or_raise/4,
   delete/3,
-  delete/4
+  delete/4,
+  delete_or_raise/3,
+  delete_or_raise/4
 ]).
 
 %%%===================================================================
@@ -54,6 +60,24 @@ insert(Repo, Adapter, #{'__meta__' := #{schema := _}} = Schema, Opts) ->
 insert(Repo, Adapter, Changeset, Opts) ->
   do_insert(Repo, Adapter, Changeset, Opts).
 
+%% @equiv insert_or_raise(Repo, Adapter, Data, [])
+insert_or_raise(Repo, Adapter, Data) ->
+  insert_or_raise(Repo, Adapter, Data, []).
+
+-spec insert_or_raise(Repo, Adapter, Data, Opts) -> Res when
+  Repo    :: xdb_repo:t(),
+  Adapter :: xdb_adapter:t(),
+  Data    :: xdb_schema:t() | xdb_changeset:t(),
+  Opts    :: xdb_lib:keyword(),
+  Res     :: xdb_repo:exec_or_raise(xdb_schema:t()).
+insert_or_raise(Repo, Adapter, Data, Opts) ->
+  case insert(Repo, Adapter, Data, Opts) of
+    {ok, Schema} ->
+      Schema;
+    {error, Changeset} ->
+      xdb_exception:invalid_changeset_error(insert, Changeset)
+  end.
+
 %% @equiv update(Repo, Adapter, Changeset, [])
 update(Repo, Adapter, Changeset) ->
   update(Repo, Adapter, Changeset, []).
@@ -66,6 +90,24 @@ update(Repo, Adapter, Changeset) ->
   Res       :: xdb_repo:w_respose().
 update(Repo, Adapter, Changeset, Opts) ->
   do_update(Repo, Adapter, Changeset, Opts).
+
+%% @equiv update_or_raise(Repo, Adapter, Changeset, [])
+update_or_raise(Repo, Adapter, Changeset) ->
+  update_or_raise(Repo, Adapter, Changeset, []).
+
+-spec update_or_raise(Repo, Adapter, Changeset, Opts) -> Res when
+  Repo      :: xdb_repo:t(),
+  Adapter   :: xdb_adapter:t(),
+  Changeset :: xdb_changeset:t(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: xdb_repo:exec_or_raise(xdb_schema:t()).
+update_or_raise(Repo, Adapter, Changeset, Opts) ->
+  case update(Repo, Adapter, Changeset, Opts) of
+    {ok, Schema} ->
+      Schema;
+    {error, ChangesetWithErrors} ->
+      xdb_exception:invalid_changeset_error(update, ChangesetWithErrors)
+  end.
 
 %% @equiv delete(Repo, Adapter, Data, [])
 delete(Repo, Adapter, Data) ->
@@ -82,6 +124,24 @@ delete(Repo, Adapter, #{'__meta__' := #{schema := _}} = Schema, Opts) ->
   do_delete(Repo, Adapter, Changeset, Opts);
 delete(Repo, Adapter, Changeset, Opts) ->
   do_delete(Repo, Adapter, Changeset, Opts).
+
+%% @equiv delete_or_raise(Repo, Adapter, Data, [])
+delete_or_raise(Repo, Adapter, Data) ->
+  delete_or_raise(Repo, Adapter, Data, []).
+
+-spec delete_or_raise(Repo, Adapter, Data, Opts) -> Res when
+  Repo    :: xdb_repo:t(),
+  Adapter :: xdb_adapter:t(),
+  Data    :: xdb_schema:t() | xdb_changeset:t(),
+  Opts    :: xdb_lib:keyword(),
+  Res     :: xdb_repo:exec_or_raise(xdb_schema:t()).
+delete_or_raise(Repo, Adapter, Data, Opts) ->
+  case delete(Repo, Adapter, Data, Opts) of
+    {ok, Schema} ->
+      Schema;
+    {error, Changeset} ->
+      xdb_exception:invalid_changeset_error(delete, Changeset)
+  end.
 
 %%%===================================================================
 %%% Internal functions

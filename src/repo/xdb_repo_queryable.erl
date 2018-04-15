@@ -11,8 +11,12 @@
   all/4,
   get/4,
   get/5,
+  get_or_raise/4,
+  get_or_raise/5,
   get_by/4,
   get_by/5,
+  get_by_or_raise/4,
+  get_by_or_raise/5,
   delete_all/3,
   delete_all/4,
   update_all/4,
@@ -53,6 +57,21 @@ get(Repo, Adapter, Queryable, Id, Opts) when is_atom(Queryable) ->
   Query = query_for_get(Repo, Queryable, Id),
   one(Repo, Adapter, Queryable, Query, Opts).
 
+%% @equiv get_or_raise(Repo, Adapter, Queryable, Id, [])
+get_or_raise(Repo, Adapter, Queryable, Id) ->
+  get_or_raise(Repo, Adapter, Queryable, Id, []).
+
+-spec get_or_raise(Repo, Adapter, Queryable, Id, Opts) -> Res when
+  Repo      :: xdb_repo:t(),
+  Adapter   :: xdb_adapter:t(),
+  Queryable :: xdb_query:queryable(),
+  Id        :: any(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: xdb_schema:t() | no_return().
+get_or_raise(Repo, Adapter, Queryable, Id, Opts) when is_atom(Queryable) ->
+  Query = query_for_get(Repo, Queryable, Id),
+  one_or_raise(Repo, Adapter, Queryable, Query, Opts).
+
 %% @equiv get_by(Repo, Adapter, Queryable, Clauses, [])
 get_by(Repo, Adapter, Queryable, Clauses) ->
   get_by(Repo, Adapter, Queryable, Clauses, []).
@@ -66,6 +85,20 @@ get_by(Repo, Adapter, Queryable, Clauses) ->
   Res       :: xdb_schema:t() | undefined | no_return().
 get_by(Repo, Adapter, Queryable, Clauses, Opts) when is_atom(Queryable) ->
   one(Repo, Adapter, Queryable, Clauses, Opts).
+
+%% @equiv get_by_or_raise(Repo, Adapter, Queryable, Clauses, [])
+get_by_or_raise(Repo, Adapter, Queryable, Clauses) ->
+  get_by_or_raise(Repo, Adapter, Queryable, Clauses, []).
+
+-spec get_by_or_raise(Repo, Adapter, Queryable, Clauses, Opts) -> Res when
+  Repo      :: xdb_repo:t(),
+  Adapter   :: xdb_adapter:t(),
+  Queryable :: xdb_query:queryable(),
+  Clauses   :: xdb_lib:keyword(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: xdb_schema:t() | no_return().
+get_by_or_raise(Repo, Adapter, Queryable, Clauses, Opts) when is_atom(Queryable) ->
+  one_or_raise(Repo, Adapter, Queryable, Clauses, Opts).
 
 %% @equiv delete_all(Repo, Adapter, Queryable, [])
 delete_all(Repo, Adapter, Queryable) ->
@@ -134,9 +167,19 @@ one(Repo, Adapter, Queryable, Clauses, Opts) ->
   Query = xdb_query:from(Queryable, [{where, Clauses}]),
 
   case all(Repo, Adapter, Query, Opts) of
-    []    -> undefined;
     [One] -> One;
-    Other -> xdb_exception:multiple_results_error(Queryable, length(Other))
+    []    -> undefined;
+    Other -> xdb_exception:multiple_results_error(Query, length(Other))
+  end.
+
+%% @private
+one_or_raise(Repo, Adapter, Queryable, Clauses, Opts) ->
+  Query = xdb_query:from(Queryable, [{where, Clauses}]),
+
+  case all(Repo, Adapter, Query, Opts) of
+    [One] -> One;
+    []    -> xdb_exception:no_results_error(Query);
+    Other -> xdb_exception:multiple_results_error(Query, length(Other))
   end.
 
 %% @private

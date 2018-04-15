@@ -9,14 +9,19 @@
 %% Test Cases
 -export([
   t_insert/1,
+  t_insert_or_raise/1,
   t_insert_errors/1,
   t_insert_on_conflict/1,
   t_insert_all/1,
   t_insert_all_on_conflict/1,
   t_update/1,
+  t_update_or_raise/1,
   t_delete/1,
+  t_delete_or_raise/1,
   t_get/1,
+  t_get_or_raise/1,
   t_get_by/1,
+  t_get_by_or_raise/1,
   t_all/1,
   t_all_with_pagination/1,
   t_delete_all/1,
@@ -58,13 +63,37 @@ t_insert(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
 
   {ok, #{id := 1}} = Repo:insert(person:schema(#{id => 1})),
-
   #{id := 1, first_name := undefined} = Repo:get(person, 1),
 
   CS = xdb_changeset:change(person:schema(#{id => 2}), #{first_name => <<"Joe">>}),
   {ok, #{id := 2, first_name := <<"Joe">>}} = Repo:insert(CS),
 
   #{id := 2, first_name := <<"Joe">>} = Repo:get(person, 2),
+  ok.
+
+-spec t_insert_or_raise(xdb_ct:config()) -> ok.
+t_insert_or_raise(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  #{id := 1} = Repo:insert_or_raise(person:schema(#{id => 1})),
+  #{id := 1, first_name := undefined} = Repo:get(person, 1),
+
+  CS = xdb_changeset:change(person:schema(#{id => 2}), #{first_name => <<"Joe">>}),
+  #{id := 2, first_name := <<"Joe">>} = Repo:insert_or_raise(CS),
+  #{id := 2, first_name := <<"Joe">>} = Repo:get(person, 2),
+
+  ErrChangeset =
+    try
+      xdb_ct:pipe(CS, [
+        {fun xdb_changeset:add_error/3, [first_name, <<"Invalid">>]},
+        {fun Repo:insert_or_raise/1, []}
+      ])
+    catch
+      error:{invalid_changeset_error, {insert, ErrCS}} ->
+        ErrCS
+    end,
+
+  [{first_name, {<<"Invalid">>, []}}] = xdb_changeset:errors(ErrChangeset),
   ok.
 
 -spec t_insert_errors(xdb_ct:config()) -> ok.
@@ -180,10 +209,10 @@ t_insert_all_on_conflict(Config) ->
 t_update(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
   ok = seed(Config),
+  Person = Repo:get(person, 1),
 
-  {ok, _CS} =
-    xdb_ct:pipe(person, [
-      {fun Repo:get/2, [1]},
+  {ok, CS} =
+    xdb_ct:pipe(Person, [
       {fun person:changeset/2, [#{first_name => <<"Joe2">>}]},
       {fun Repo:update/1, []}
     ]),
@@ -195,6 +224,35 @@ t_update(Config) ->
       {fun person:schema/1, []},
       {fun person:changeset/2, [#{first_name => "other", last_name => "other", age => 33}]},
       {fun Repo:update/1, []}
+    ])
+  end, stale_entry_error).
+
+-spec t_update_or_raise(xdb_ct:config()) -> ok.
+t_update_or_raise(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+  ok = seed(Config),
+  Person = Repo:get(person, 1),
+
+  _ = xdb_ct:pipe(Person, [
+    {fun person:changeset/2, [#{first_name => <<"Joe2">>}]},
+    {fun Repo:update_or_raise/1, []}
+  ]),
+
+  #{id := 1, first_name := <<"Joe2">>} = Repo:get(person, 1),
+
+  ok = assert_error(fun() ->
+    xdb_ct:pipe(Person, [
+      {fun xdb_changeset:change/2, [#{first_name => <<"Joe">>}]},
+      {fun xdb_changeset:add_error/3, [first_name, <<"Invalid">>]},
+      {fun Repo:update_or_raise/1, []}
+    ])
+  end, invalid_changeset_error),
+
+  ok = assert_error(fun() ->
+    xdb_ct:pipe(#{id => 11}, [
+      {fun person:schema/1, []},
+      {fun person:changeset/2, [#{first_name => "other", last_name => "other", age => 33}]},
+      {fun Repo:update_or_raise/1, []}
     ])
   end, stale_entry_error).
 
@@ -226,6 +284,35 @@ t_delete(Config) ->
 
   ok = assert_error(fun() -> Repo:delete(P1) end, stale_entry_error).
 
+-spec t_delete_or_raise(xdb_ct:config()) -> ok.
+t_delete_or_raise(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  undefined = Repo:get(person, 1),
+  ok = seed(Config),
+  P1 = #{'__meta__' := _, id := 1} = Repo:get(person, 1),
+
+  #{'__meta__' := _, id := 1} = Repo:delete_or_raise(P1),
+  undefined = Repo:get(person, 1),
+
+  #{id := 2} =
+    xdb_ct:pipe(#{id => 2}, [
+      {fun person:schema/1, []},
+      {fun xdb_changeset:change/2, [#{first_name => <<"Joe">>}]},
+      {fun Repo:delete_or_raise/1, []}
+    ]),
+
+  ok = assert_error(fun() ->
+    xdb_ct:pipe(#{id => 3}, [
+      {fun person:schema/1, []},
+      {fun xdb_changeset:change/2, [#{first_name => <<"Joe">>}]},
+      {fun xdb_changeset:add_error/3, [first_name, <<"Invalid">>]},
+      {fun Repo:delete_or_raise/1, []}
+    ])
+  end, invalid_changeset_error),
+
+  ok = assert_error(fun() -> Repo:delete_or_raise(P1) end, stale_entry_error).
+
 -spec t_get(xdb_ct:config()) -> ok.
 t_get(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
@@ -237,6 +324,19 @@ t_get(Config) ->
   #{'__meta__' := _, id := 2} = Repo:get(person, 2),
   #{'__meta__' := _, id := 3} = Repo:get(person, 3),
   ok.
+
+-spec t_get_or_raise(xdb_ct:config()) -> ok.
+t_get_or_raise(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+  ok = seed(Config),
+
+  #{'__meta__' := _, id := 1} = Repo:get_or_raise(person, 1),
+  #{'__meta__' := _, id := 2} = Repo:get_or_raise(person, 2),
+  #{'__meta__' := _, id := 3} = Repo:get_or_raise(person, 3),
+
+  ok = assert_error(fun() ->
+    Repo:get_or_raise(person, 11)
+  end, no_results_error).
 
 -spec t_get_by(xdb_ct:config()) -> ok.
 t_get_by(Config) ->
@@ -254,6 +354,25 @@ t_get_by(Config) ->
   ok = assert_error(fun() ->
     Repo:get_by(person, [{first_name, <<"Alan">>}])
   end, multiple_results_error).
+
+-spec t_get_by_or_raise(xdb_ct:config()) -> ok.
+t_get_by_or_raise(Config) ->
+  Repo = xdb_lib:keyfetch(repo, Config),
+
+  [] = Repo:all(person),
+  ok = seed(Config),
+
+  #{id := 1} = Repo:get_by_or_raise(person, [{id, 1}]),
+  #{id := 3} = Repo:get_by_or_raise(person, [{last_name, <<"Poe">>}]),
+  #{id := 1} = Repo:get_by_or_raise(person, [{first_name, <<"Alan">>}, {last_name, <<"Turing">>}]),
+
+  ok = assert_error(fun() ->
+    Repo:get_by_or_raise(person, [{first_name, <<"Alan">>}])
+  end, multiple_results_error),
+
+  ok = assert_error(fun() ->
+    Repo:get_by_or_raise(person, [{first_name, <<"Me">>}])
+  end, no_results_error).
 
 -spec t_all(xdb_ct:config()) -> ok.
 t_all(Config) ->
@@ -419,5 +538,5 @@ seed(Config) ->
     person:schema(#{id => 3, first_name => "Alan", last_name => "Poe", age => 40})
   ],
 
-  _ = [{ok, _} = Repo:insert(P) || P <- People],
+  _ = [_ = Repo:insert_or_raise(P) || P <- People],
   ok.

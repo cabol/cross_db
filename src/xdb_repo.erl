@@ -83,9 +83,13 @@
                    | {error, xdb_changeset:t()}
                    | no_return().
 
+%% Execute the actiopn or raise an error
+-type exec_or_raise(R) :: R | no_return().
+
 -export_type([
   t/0,
-  w_respose/0
+  w_respose/0,
+  exec_or_raise/1
 ]).
 
 %%%===================================================================
@@ -109,16 +113,33 @@
   Opts      :: xdb_lib:keyword(),
   Res       :: xdb_schema:t() | undefined | no_return().
 
+-callback get_or_raise(Queryable, Id, Opts) -> Res when
+  Queryable :: xdb_query:queryable(),
+  Id        :: any(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: xdb_schema:t() | no_return().
+
 -callback get_by(Queryable, Clauses, Opts) -> Res when
   Queryable :: xdb_query:queryable(),
   Clauses   :: xdb_lib:keyword(),
   Opts      :: xdb_lib:keyword(),
   Res       :: xdb_schema:t() | undefined | no_return().
 
+-callback get_by_or_raise(Queryable, Clauses, Opts) -> Res when
+  Queryable :: xdb_query:queryable(),
+  Clauses   :: xdb_lib:keyword(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: xdb_schema:t() | no_return().
+
 -callback insert(Schema, Opts) -> Res when
   Schema :: xdb_schema:t(),
   Opts   :: xdb_lib:keyword(),
   Res    :: w_respose().
+
+-callback insert_or_raise(Schema, Opts) -> Res when
+  Schema :: xdb_schema:t(),
+  Opts   :: xdb_lib:keyword(),
+  Res    :: exec_or_raise(xdb_schema:t()).
 
 -callback insert_all(SchemaMod, Entries, Opts) -> Res when
   SchemaMod :: module(),
@@ -133,6 +154,11 @@
   Opts :: xdb_lib:keyword(),
   Res  :: w_respose().
 
+-callback delete_or_raise(Data, Opts) -> Res when
+  Data :: xdb_schema:t() | xdb_changeset:t(),
+  Opts :: xdb_lib:keyword(),
+  Res  :: exec_or_raise(xdb_schema:t()).
+
 -callback delete_all(Queryable, Opts) -> Res when
   Queryable :: xdb_query:t() | xdb_query:queryable(),
   Opts      :: xdb_lib:keyword(),
@@ -142,6 +168,11 @@
   Changeset :: xdb_changeset:t(),
   Opts      :: xdb_lib:keyword(),
   Res       :: w_respose().
+
+-callback update_or_raise(Changeset, Opts) -> Res when
+  Changeset :: xdb_changeset:t(),
+  Opts      :: xdb_lib:keyword(),
+  Res       :: exec_or_raise(xdb_schema:t()).
 
 -callback update_all(Queryable, Updates, Opts) -> Res when
   Queryable :: xdb_query:t() | xdb_query:queryable(),
