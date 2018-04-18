@@ -91,7 +91,9 @@ supervise(Children, SupFlagsMap) ->
 
 %% @private
 adapter_child_spec(Repo, Adapter, Opts) ->
-  case erlang:function_exported(Adapter, child_spec, 2) of
-    true  -> Adapter:child_spec(Repo, Opts);
-    false -> undefined
+  case {code:ensure_loaded(Adapter), erlang:function_exported(Adapter, child_spec, 2)} of
+    {{module, Adapter}, true} ->
+      Adapter:child_spec(Repo, Opts);
+    _ ->
+      undefined
   end.
