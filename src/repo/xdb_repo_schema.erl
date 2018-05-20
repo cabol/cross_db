@@ -75,7 +75,7 @@ insert_or_raise(Repo, Adapter, Data, Opts) ->
     {ok, Schema} ->
       Schema;
     {error, Changeset} ->
-      xdb_exception:invalid_changeset_error(insert, Changeset)
+      xdb_exception:invalid_changeset_error(Changeset)
   end.
 
 %% @equiv update(Repo, Adapter, Changeset, [])
@@ -106,7 +106,7 @@ update_or_raise(Repo, Adapter, Changeset, Opts) ->
     {ok, Schema} ->
       Schema;
     {error, ChangesetWithErrors} ->
-      xdb_exception:invalid_changeset_error(update, ChangesetWithErrors)
+      xdb_exception:invalid_changeset_error(ChangesetWithErrors)
   end.
 
 %% @equiv delete(Repo, Adapter, Data, [])
@@ -140,7 +140,7 @@ delete_or_raise(Repo, Adapter, Data, Opts) ->
     {ok, Schema} ->
       Schema;
     {error, Changeset} ->
-      xdb_exception:invalid_changeset_error(delete, Changeset)
+      xdb_exception:invalid_changeset_error(Changeset)
   end.
 
 %%%===================================================================

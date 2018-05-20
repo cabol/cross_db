@@ -89,7 +89,7 @@ t_insert_or_raise(Config) ->
         {fun Repo:insert_or_raise/1, []}
       ])
     catch
-      error:{invalid_changeset_error, {insert, ErrCS}} ->
+      error:{invalid_changeset_error, ErrCS} ->
         ErrCS
     end,
 

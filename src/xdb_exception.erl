@@ -6,7 +6,7 @@
 -module(xdb_exception).
 
 -export([
-  invalid_changeset_error/2,
+  invalid_changeset_error/1,
   no_primary_key_field_error/1,
   no_primary_key_value_error/2,
   multiple_results_error/2,
@@ -19,9 +19,9 @@
 %%% API
 %%%===================================================================
 
--spec invalid_changeset_error(atom(), xdb_changeset:t()) -> no_return().
-invalid_changeset_error(Action, Changeset) ->
-  xdb_lib:raise(invalid_changeset_error, {Action, Changeset}).
+-spec invalid_changeset_error(xdb_changeset:t()) -> no_return().
+invalid_changeset_error(Changeset) ->
+  xdb_lib:raise(invalid_changeset_error, Changeset).
 
 -spec no_primary_key_field_error(xdb_schema:t()) -> no_return().
 no_primary_key_field_error(Schema) ->
