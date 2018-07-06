@@ -31,7 +31,7 @@ The config file might looks like this:
 
 {deps, [
   %% CrossDB dependency
-  {cross_db, {git, "https://github.com/cabol/cross_db", {branch, "master"}}},
+  {cross_db, {git, "https://github.com/cabol/cross_db", {tag, "v0.1.0"}}},
 
   %% Pipe operator (useful for changesets)
   {fancyflow, {git, "https://github.com/ferd/fancyflow", {ref, "81cf9df"}}},
