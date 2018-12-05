@@ -45,6 +45,7 @@
   validate_required/2,
   validate_inclusion/3,
   validate_number/3,
+  validate_integer/2,
   validate_length/3,
   validate_format/3
 ]).
@@ -310,6 +311,14 @@ validate_number(Field, Value, Message, SpecFun, TargetValue) ->
   case SpecFun(Value, TargetValue) of
     true  -> [];
     false -> [{Field, {Message, [{validation, number}]}}]
+  end.
+
+
+-spec validate_integer(t(), atom()) -> t().
+validate_integer(Changeset, Key) ->
+  case is_integer(get_field(Changeset, Key)) of
+    true  -> Changeset;
+    false -> add_error(Changeset, Key, <<"must be integer">>)
   end.
 
 -spec validate_length(t(), atom(), xdb_lib:keyword()) -> t().
