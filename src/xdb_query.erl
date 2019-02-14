@@ -102,7 +102,7 @@ from(Schema, Exprs) when is_atom(Schema), is_list(Exprs) ->
 
 -spec operators() -> [operator()].
 operators() ->
-  ['<', '>', '==', '=<', '>=', '/=', 'like'].
+  ['<', '>', '==', '=<', '>=', '/=', 'like', 'in'].
 
 -spec validate_operator(atom()) -> operator() | no_return().
 validate_operator(Op) when is_atom(Op) ->
