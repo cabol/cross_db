@@ -231,6 +231,14 @@ parse_conditions({Op, Exprs}, {Values, CleanExprs, Count}) when ?logical_op(Op) 
     [{Op, lists:reverse(NewCleanExprs)} | CleanExprs],
     NewCount
   };
+parse_conditions({Name, 'in', Value}, {Values, CleanExprs, Count}) when is_list(Value) ->
+  CountSeq = lists:seq(Count, Count - 1 + length(Value)),
+  QMarks = [{'?', C} || C <- CountSeq],
+  {
+    lists:append(Value, Values),
+    [{Name, xdb_query:validate_operator('in'), QMarks} | CleanExprs],
+    lists:last(CountSeq) + 1
+  };
 parse_conditions({Name, Op, Value}, {Values, CleanExprs, Count}) when not is_atom(Value) ->
   {
     [Value | Values],
@@ -281,6 +289,9 @@ where_clause({'or', Exprs}, EscapeFun, SlotFun) ->
   ["(", interpose(" OR ", Clauses), ")"];
 where_clause({'not', Expr}, EscapeFun, SlotFun) ->
   [" NOT ", "(", where_clause(Expr, EscapeFun, SlotFun), ")"];
+where_clause({Name, 'in', Slot}, EscapeFun, SlotFun) when is_list(Slot) ->
+  Slots = lists:join(",", [SlotFun(S) || S <- Slot]),
+  [EscapeFun(Name), " ", operator_to_string('in'), "(", Slots, ")"];
 where_clause({Name, Op, {'?', _} = Slot}, EscapeFun, SlotFun) ->
   [EscapeFun(Name), " ", operator_to_string(Op), SlotFun(Slot)];
 where_clause({Name1, Op, Name2}, EscapeFun, _SlotFun) ->
