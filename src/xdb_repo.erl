@@ -96,7 +96,7 @@
 %%% API
 %%%===================================================================
 
--optional_callbacks([init/1, in_transaction/0, rollback/1, transaction/2]).
+-optional_callbacks([init/1, in_transaction/0, rollback/1, transaction/2, posthook/2, prehook/2]).
 
 -callback init(Config) -> Res when
   Config :: xdb_lib:keyword(),
@@ -188,3 +188,11 @@
   Fun  :: fun(() -> any()),
   Opts :: xdb_lib:keyword(),
   Res  :: {ok, any()} | {error, any()}.
+
+-callback prehook(Action, Data) -> ok when
+  Action :: insert | update | delete | transaction,
+  Data :: any().
+
+-callback posthook(Action, Data) -> ok when
+  Action :: insert | update | delete | transaction,
+  Data :: any().

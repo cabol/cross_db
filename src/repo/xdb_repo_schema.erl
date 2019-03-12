@@ -249,7 +249,12 @@ exec(Changeset, Adapter, Action, Args) ->
 
 %% @private
 postprocess({ok, Values}, Changeset) ->
-  {ok, load_changes(Changeset, loaded, Values)};
+  Loaded = load_changes(Changeset, loaded, Values),
+  Repo = xdb_changeset:repo(Changeset),
+  Action = xdb_changeset:action(Changeset),
+  erlang:function_exported(Repo, posthook, 2) andalso
+    Repo:posthook(Action, Loaded),
+  {ok, Loaded};
 postprocess({invalid, Constraints}, _Changeset) ->
   %% @TODO: constraints_to_errors (add errors to changeset)
   {error, Constraints};
