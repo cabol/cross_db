@@ -150,13 +150,16 @@ reduce_while(Fun, AccIn, List) when is_function(Fun, 2) ->
 
 -spec raise(any()) -> no_return().
 raise(Reason) ->
-  erlang:raise(error, Reason, erlang:get_stacktrace()).
+  {_, Trace} = erlang:process_info(self(), current_stacktrace),
+  erlang:raise(error, Reason, Trace).
 
 -spec raise(atom(), any()) -> no_return().
 raise(Error, Reason) when is_atom(Error) ->
-  erlang:raise(error, {Error, Reason}, erlang:get_stacktrace()).
+  {_, Trace} = erlang:process_info(self(), current_stacktrace),
+  erlang:raise(error, {Error, Reason}, Trace).
 
 -spec raise(atom(), string(), [any()]) -> no_return().
 raise(Error, Text, Args) when is_atom(Error) ->
   Reason = stringify(Text, Args),
-  erlang:raise(error, {Error, Reason}, erlang:get_stacktrace()).
+  {_, Trace} = erlang:process_info(self(), current_stacktrace),
+  erlang:raise(error, {Error, Reason}, Trace).
