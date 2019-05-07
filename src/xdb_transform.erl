@@ -206,6 +206,7 @@ repo_api_specs() ->
     {xdb_repo_schema,    delete_or_raise, 2},
     {xdb_repo_queryable, all,             1},
     {xdb_repo_queryable, all,             2},
+    {xdb_repo_queryable, all_by,          2},
     {xdb_repo_queryable, get,             2},
     {xdb_repo_queryable, get,             3},
     {xdb_repo_queryable, get_or_raise,    2},

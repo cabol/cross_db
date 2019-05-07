@@ -9,6 +9,7 @@
 -export([
   all/3,
   all/4,
+  all_by/4,
   get/4,
   get/5,
   get_or_raise/4,
@@ -99,6 +100,11 @@ get_by_or_raise(Repo, Adapter, Queryable, Clauses) ->
   Res       :: xdb_schema:t() | no_return().
 get_by_or_raise(Repo, Adapter, Queryable, Clauses, Opts) when is_atom(Queryable) ->
   one_or_raise(Repo, Adapter, Queryable, Clauses, Opts).
+
+%% @private
+all_by(Repo, Adapter, Queryable, Clauses) ->
+  Query = xdb_query:from(Queryable, [{where, Clauses}]),
+  all(Repo, Adapter, Query, []).
 
 %% @equiv delete_all(Repo, Adapter, Queryable, [])
 delete_all(Repo, Adapter, Queryable) ->

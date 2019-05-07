@@ -14,6 +14,7 @@
   t_update/1,
   t_delete/1,
   t_all/1,
+  t_all_by/1,
   t_get/1,
   t_get_by/1
 ]).
@@ -202,4 +203,9 @@ t_get(_Config) ->
 -spec t_get_by(xdb_ct:config()) -> ok.
 t_get_by(_Config) ->
   #{'__meta__' := _, id := 1} = ?REPO:get_by(person, [{id, 1}]),
+  ok.
+
+-spec t_all_by(xdb_ct:config()) -> ok.
+t_all_by(_Config) ->
+  [#{'__meta__' := _, id := 1}] = ?REPO:all_by(person, [{id, 1}]),
   ok.
