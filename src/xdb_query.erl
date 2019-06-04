@@ -160,5 +160,5 @@ parse_exprs([{Opt, Value} | Exprs], Acc) ->
     true when is_list(Value); is_tuple(Value) ->
       parse_exprs(Exprs, Acc#{Opt => Value});
     false ->
-      parse_exprs(Exprs, Acc)
+      xdb_exception:invalid_query_error(Opt, Value)
   end.
