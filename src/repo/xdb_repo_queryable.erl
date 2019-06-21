@@ -141,7 +141,16 @@ transaction(Repo, Adapter, Fun) ->
   Opts    :: xdb_lib:keyword(),
   Res     :: {ok, any()} | {error, any()}.
 transaction(Repo, Adapter, Fun, Opts) when is_function(Fun, 0) ->
-  Adapter:transaction(Repo, Fun, Opts).
+  erlang:function_exported(Repo, prehook, 2) andalso
+    Repo:prehook(transaction, Opts),
+  Result = Adapter:transaction(Repo, Fun, Opts),
+  case {Result, erlang:function_exported(Repo, posthook, 2)} of
+    {{ok, Res}, true} ->
+      Repo:posthook(transaction, Res);
+    _ ->
+      ok
+  end,
+  Result.
 
 %%%===================================================================
 %%% Internal functions

@@ -15,7 +15,8 @@
   t_delete/1,
   t_all/1,
   t_get/1,
-  t_get_by/1
+  t_get_by/1,
+  t_hooks/1
 ]).
 
 -import(xdb_ct, [assert_error/2]).
@@ -202,4 +203,26 @@ t_get(_Config) ->
 -spec t_get_by(xdb_ct:config()) -> ok.
 t_get_by(_Config) ->
   #{'__meta__' := _, id := 1} = ?REPO:get_by(person, [{id, 1}]),
+  ok.
+
+-spec t_hooks(xdb_ct:config()) -> ok.
+t_hooks(_Config) ->
+  _ = ets:new(?REPO, [public, named_table]),
+
+  _ = [pipe](
+    #{id => 5},
+    person:schema(_),
+    ?REPO:insert(_)
+  ),
+  [{_, {insert, #{id := 5}}}] = ets:tab2list(?REPO),
+  ets:delete_all_objects(?REPO),
+
+  _ = [pipe](
+    #{id => 1},
+    person:schema(_),
+    xdb_changeset:change(_, #{first_name => <<"Joe">>}),
+    ?REPO:update(_)
+  ),
+  [{_, {update, #{id := 1, first_name := <<"Joe">>}}}] = ets:tab2list(?REPO),
+  ets:delete_all_objects(?REPO),
   ok.
