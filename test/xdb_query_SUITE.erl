@@ -9,7 +9,8 @@
 -export([
   t_from/1,
   t_validate_operator/1,
-  t_pk_filter/1
+  t_pk_filter/1,
+  t_invalid_query/1
 ]).
 
 -import(xdb_ct, [assert_error/2]).
@@ -75,6 +76,12 @@ t_pk_filter(_Config) ->
   {false, _} = xdb_query:pk_filter(PKs, []),
   ok.
 
+-spec t_invalid_query(xdb_ct:config()) -> ok.
+t_invalid_query(_Config) ->
+  ok = assert_error(fun() ->
+    xdb_query:from(person, [{where, {id, 10}}])
+  end, {invalid_query_error, "invalid query entry: {where,{id,10}}"}).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -93,6 +100,5 @@ full_query() ->
     {preload,  []},
     {distinct, []},
     {having,   []},
-    {join,     []},
-    {invalid,  []}
+    {join,     []}
   ]).

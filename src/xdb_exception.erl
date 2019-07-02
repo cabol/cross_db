@@ -12,7 +12,8 @@
   multiple_results_error/2,
   no_results_error/1,
   stale_entry_error/2,
-  no_transaction_is_active/0
+  no_transaction_is_active/0,
+  invalid_query_error/2
 ]).
 
 %%%===================================================================
@@ -51,3 +52,8 @@ stale_entry_error(Action, Schema) ->
 -spec no_transaction_is_active() -> no_return().
 no_transaction_is_active() ->
   xdb_lib:raise(no_transaction_is_active, "cannot call rollback outside of transaction").
+
+-spec invalid_query_error(atom(), any()) -> no_return().
+invalid_query_error(Opt, Value) ->
+  Text = "invalid query entry: ~p",
+  xdb_lib:raise(invalid_query_error, Text, [{Opt, Value}]).
