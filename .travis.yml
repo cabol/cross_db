@@ -1,5 +1,6 @@
 language: erlang
 otp_release:
-  - 20.2
+  - 21.1
 script:
-  - rebar3 do dialyzer, ct
+  - rebar3 version
+  - rebar3 do dialyzer, ct --readable=false

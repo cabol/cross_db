@@ -45,7 +45,12 @@
 init_per_testcase(_, Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
   {ok, _} = Repo:start_link(),
-  {_, _} = Repo:delete_all(person),
+  %% On the first run this table does not exist and this will throw an error
+  try
+    Repo:delete_all(person)
+  catch _:_ ->
+    ok
+  end,
   Config.
 
 -spec end_per_testcase(atom(), xdb_ct:config()) -> xdb_ct:config().
@@ -211,7 +216,7 @@ t_update(Config) ->
   ok = seed(Config),
   Person = Repo:get(person, 1),
 
-  {ok, CS} =
+  {ok, _CS} =
     xdb_ct:pipe(Person, [
       {fun person:changeset/2, [#{first_name => <<"Joe2">>}]},
       {fun Repo:update/1, []}

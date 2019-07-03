@@ -258,7 +258,10 @@ repo_sup_spec(Repo) ->
 repo_fun_template(Mod, Fun, Arity, Repo, Adapter) ->
   Args = splicing_args(Arity),
   Body = build_repo_fun(Repo, Adapter, Mod, atom_to_list(Fun), Args),
-  {Fun, Arity, Body}.
+  case build_repo_fun_spec(Repo, Fun, Args) of
+    [] -> {Fun, Arity, Body};
+    Spec -> {Fun, Arity, Body, Spec}
+  end.
 
 %% @private
 build_repo_fun(Repo, Adapter, Adapter, Fun, Args) ->
@@ -267,6 +270,14 @@ build_repo_fun(Repo, Adapter, Adapter, Fun, Args) ->
 build_repo_fun(Repo, Adapter, Mod, Fun, Args) ->
   Body = build_repo_fun_body(Fun, "~p, ~p", Args),
   ?Q(text(Body, [Mod, Repo, Adapter])).
+
+%%@private
+build_repo_fun_spec(_, rollback, _) ->
+  ?Q("-spec rollback(any()) -> no_return().");
+
+build_repo_fun_spec(_, _, _) ->
+  %% TODO generate specs for all funs?
+  [].
 
 %% @private
 build_repo_fun_body(Fun, Prefix, "") ->
@@ -291,12 +302,12 @@ maybe_transaction_funs(Specs, Repo, Adapter) ->
 maybe_add_funs(Result) ->
   case erlang:get(funs) of
     undefined -> Result;
-    ExtFuns   -> lists:droplast(Result) ++ ExtFuns ++ [lists:last(Result)]
+    ExtFuns   -> lists:droplast(Result) ++ lists:reverse(ExtFuns) ++ [lists:last(Result)]
   end.
 
 %% @private
 build_export() ->
-  build_export(erlang:erase(exports)).
+  build_export(lists:reverse(erlang:erase(exports))).
 
 %% @private
 build_export([{FirstFun, FirstArity} | Exports]) ->
@@ -309,12 +320,20 @@ build_export(_) ->
 %% @private
 add_funs(FunSpecs) ->
   lists:foreach(fun({Name, Arity, Body}) ->
-    add_fun(Name, Arity, Body)
+                    add_fun(Name, Arity, Body);
+                 ({Name, Arity, Body, Spec}) ->
+                    add_fun(Name, Arity, Body, Spec)
   end, FunSpecs).
 
 %% @private
 add_fun(Name, Arity, Body) ->
   _ = do_put(exports, {Name, Arity}, erlang:get(exports)),
+  do_put(funs, Body, erlang:get(funs)).
+
+%% @private
+add_fun(Name, Arity, Body, Spec) ->
+  _ = do_put(exports, {Name, Arity}, erlang:get(exports)),
+  do_put(funs, Spec, erlang:get(funs)),
   do_put(funs, Body, erlang:get(funs)).
 
 %% @private
