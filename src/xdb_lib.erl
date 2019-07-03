@@ -144,22 +144,19 @@ reduce_while(Fun, AccIn, List) when is_function(Fun, 2) ->
   catch
     throw:{halt, AccOut} ->
       AccOut;
-    Kind:Reason ->
-      erlang:raise(Kind, Reason, erlang:get_stacktrace())
+    _:Reason ->
+      erlang:error(Reason)
   end.
 
 -spec raise(any()) -> no_return().
 raise(Reason) ->
-  {_, Trace} = erlang:process_info(self(), current_stacktrace),
-  erlang:raise(error, Reason, Trace).
+  erlang:error(Reason).
 
 -spec raise(atom(), any()) -> no_return().
 raise(Error, Reason) when is_atom(Error) ->
-  {_, Trace} = erlang:process_info(self(), current_stacktrace),
-  erlang:raise(error, {Error, Reason}, Trace).
+  erlang:error({Error, Reason}).
 
 -spec raise(atom(), string(), [any()]) -> no_return().
 raise(Error, Text, Args) when is_atom(Error) ->
   Reason = stringify(Text, Args),
-  {_, Trace} = erlang:process_info(self(), current_stacktrace),
-  erlang:raise(error, {Error, Reason}, Trace).
+  erlang:error({Error, Reason}).

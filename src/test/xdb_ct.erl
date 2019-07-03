@@ -14,7 +14,7 @@
 %%% API
 %%%===================================================================
 
--spec assert_error(fun(), term()) -> any().
+-spec assert_error(fun(() -> no_return()), term()) -> any().
 assert_error(Fun, Error) ->
   try Fun()
   catch

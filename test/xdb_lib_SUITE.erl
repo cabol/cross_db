@@ -1,5 +1,7 @@
 -module(xdb_lib_SUITE).
 
+-dialyzer({nowarn_function, t_raise/1}).
+
 %% Common Test
 -export([
   all/0

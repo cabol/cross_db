@@ -24,7 +24,9 @@
 init_per_testcase(_, Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
   {ok, _} = Repo:start_link(),
-  {_, _} = Repo:delete_all(person),
+  _ = try {_, _} = Repo:delete_all(person)
+  catch _:_ -> ok
+  end,
   Config.
 
 -spec end_per_testcase(atom(), xdb_ct:config()) -> xdb_ct:config().
