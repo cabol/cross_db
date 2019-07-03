@@ -16,8 +16,6 @@
   t_sup_spec/1
 ]).
 
--import(xdb_ct, [assert_error/2]).
-
 -define(EXCLUDED_FUNS, [
   module_info,
   all,
@@ -72,9 +70,7 @@ t_missing_repo_config(_Config) ->
   _ = process_flag(trap_exit, true),
 
   Expected = {badarg, "configuration for other_repo not specified in cross_db environment"},
-  {error, {Expected, _}} = assert_error(fun() ->
-    xdb_repo_sup:start_link(other_repo, cross_db, ?ADAPTER, [])
-  end, badarg),
+  {error, {Expected, _}} = xdb_repo_sup:start_link(other_repo, cross_db, ?ADAPTER, []),
   ok.
 
 -spec t_no_repo_init_fun(xdb_ct:config()) -> ok.

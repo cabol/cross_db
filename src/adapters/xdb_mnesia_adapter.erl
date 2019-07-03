@@ -89,6 +89,7 @@ in_transaction(_Repo) ->
   mnesia:is_transaction().
 
 %% @hidden
+-spec rollback(xdb_repo:t(), any()) -> no_return().
 rollback(Repo, Value) ->
   case in_transaction(Repo) of
     true  -> error(Value);
