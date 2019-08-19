@@ -1,5 +1,5 @@
 language: erlang
 otp_release:
-  - 20.2
+  - 20.3
 script:
   - rebar3 do dialyzer, ct
