@@ -70,6 +70,7 @@ t_cast_integer(_Config) ->
   {ok, 3} = xdb_schema_type:cast(integer, 3),
   {ok, 3} = xdb_schema_type:cast(integer, 3.14),
 
+  {error, {invalid, _}} = xdb_schema_type:cast(integer, "3.5"),
   {error, {invalid, _}} = xdb_schema_type:cast(integer, "no_integer"),
   {error, {invalid, _}} = xdb_schema_type:cast(integer, '3.14'),
   _ = t_common_invalid_types(integer),

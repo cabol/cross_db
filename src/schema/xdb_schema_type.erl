@@ -99,6 +99,6 @@ cast_float(Data) ->
 %% @private
 cast_integer(Data) ->
   case string:to_integer(Data) of
-    {error, no_integer} -> {error, {invalid, Data}};
-    {Integer, _Rest}    -> {ok, Integer}
+    {Integer, []}       -> {ok, Integer};
+    _                   -> {error, {invalid, Data}}
   end.
