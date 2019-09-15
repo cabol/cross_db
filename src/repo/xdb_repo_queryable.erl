@@ -145,7 +145,7 @@ transaction(Repo, Adapter, Fun) ->
   Adapter :: xdb_adapter:t(),
   Fun     :: fun(() -> any()),
   Opts    :: xdb_lib:keyword(),
-  Res     :: {ok, any()} | {error, any()}.
+  Res     :: {ok, any()} | {error, any()} | {error, any(), [tuple()]}.
 transaction(Repo, Adapter, Fun, Opts) when is_function(Fun, 0) ->
   Adapter:transaction(Repo, Fun, Opts).
 

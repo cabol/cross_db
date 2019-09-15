@@ -187,4 +187,4 @@
 -callback transaction(Fun, Opts) -> Res when
   Fun  :: fun(() -> any()),
   Opts :: xdb_lib:keyword(),
-  Res  :: {ok, any()} | {error, any()}.
+  Res  :: {ok, any()} | {error, any()} | {error, any(), [tuple()]}.
