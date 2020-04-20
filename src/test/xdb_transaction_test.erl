@@ -101,7 +101,7 @@ t_transaction_error(Config) ->
       age        => 41
     })),
 
-  {error, _} =
+  {error, _, _} =
     Repo:transaction(fun() ->
       {ok, #{id := 2}} =
         Repo:insert(person:schema(#{
@@ -120,7 +120,7 @@ t_transaction_error(Config) ->
 
   [_] = Repo:all(person),
 
-  {error, _} =
+  {error, _, _} =
     Repo:transaction(fun() ->
       {ok, #{id := 2}} =
         Repo:insert(person:schema(#{
@@ -161,7 +161,7 @@ t_in_transaction(Config) ->
 t_rollback(Config) ->
   Repo = xdb_lib:keyfetch(repo, Config),
 
-  {error, my_error} =
+  {error, my_error, _} =
     Repo:transaction(fun() ->
       {ok, #{id := 1}} =
         Repo:insert(person:schema(#{

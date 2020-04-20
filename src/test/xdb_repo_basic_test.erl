@@ -211,7 +211,7 @@ t_update(Config) ->
   ok = seed(Config),
   Person = Repo:get(person, 1),
 
-  {ok, CS} =
+  {ok, _CS} =
     xdb_ct:pipe(Person, [
       {fun person:changeset/2, [#{first_name => <<"Joe2">>}]},
       {fun Repo:update/1, []}

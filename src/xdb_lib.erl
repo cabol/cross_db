@@ -144,8 +144,8 @@ reduce_while(Fun, AccIn, List) when is_function(Fun, 2) ->
   catch
     throw:{halt, AccOut} ->
       AccOut;
-    Kind:Reason ->
-      erlang:raise(Kind, Reason, erlang:get_stacktrace())
+    Kind:Reason:Trace ->
+      erlang:raise(Kind, Reason, Trace)
   end.
 
 -spec raise(any()) -> no_return().

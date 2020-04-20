@@ -77,9 +77,9 @@ transaction(_Repo, Fun, _Opts) ->
 
   case mnesia:transaction(TxFun) of
     {aborted, {Error, Reason}} when is_list(Reason) ->
-      {error, Error};
+      {error, Error, #{reason => Reason}};
     {aborted, Reason} ->
-      {error, Reason};
+      {error, Reason, []};
     {atomic, Result} ->
       {ok, Result}
   end.
