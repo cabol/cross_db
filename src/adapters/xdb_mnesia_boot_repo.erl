@@ -23,7 +23,7 @@ init(Opts) ->
 
 %% @private
 init_mnesia(Opts) ->
-  stopped = mnesia:stop(),
+  %% stopped = mnesia:stop(),
   ok = mnesia_create_schema(node()),
   ok = mnesia:start(),
   ok = create_schemas(Opts),
