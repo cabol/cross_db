@@ -25,7 +25,7 @@
 %% Query grammar based on conditions
 -type field_name()  :: atom().
 -type field_value() :: any().
--type operator()    :: '<' | '>' | '==' | '=<' | '>=' | '/=' | 'like'.
+-type operator()    :: '<' | '>' | '==' | '=<' | '>=' | '/=' | 'like' | 'in' | '+' | '-' | '*' | '/'.
 -type conditions()  :: [condition()].
 -type condition()   :: {'and', [condition()]}
                      | {'or', [condition()]}
@@ -102,7 +102,7 @@ from(Schema, Exprs) when is_atom(Schema), is_list(Exprs) ->
 
 -spec operators() -> [operator()].
 operators() ->
-  ['<', '>', '==', '=<', '>=', '/=', 'like', 'in'].
+  ['<', '>', '==', '=<', '>=', '/=', 'like', 'in', '+', '-', '*', '/'].
 
 -spec validate_operator(atom()) -> operator() | no_return().
 validate_operator(Op) when is_atom(Op) ->
