@@ -51,7 +51,7 @@
                    | {field(), term()}.
 
 -define(logical_op(Op_), Op_ == 'and'; Op_ == 'or'; Op_ == 'not').
--define(null_value(V_), V_ =/= 'null', V_ =/= 'not_null').
+-define(null_check(V_), V_ == 'null' orelse V_ == 'not_null').
 
 %%%===================================================================
 %%% API
@@ -231,38 +231,78 @@ parse_conditions({Op, Exprs}, {Values, CleanExprs, Count}) when ?logical_op(Op) 
     [{Op, lists:reverse(NewCleanExprs)} | CleanExprs],
     NewCount
   };
-parse_conditions({Name, 'in', Value}, {Values, CleanExprs, Count}) when is_list(Value) ->
-  CountSeq = lists:seq(Count, Count - 1 + length(Value)),
+parse_conditions({_Name, 'in', Value}, {Values, CleanExprs, Count}) when Value == [] ->
+  %% constant false expression
+  {
+    Values,
+    [{1, '==', 0} | CleanExprs],
+    Count
+  };
+parse_conditions({Arg, 'in', ValueList}, {Values, CleanExprs, Count}) when is_list(ValueList) ->
+  {NewValues, NewExprs, NewCount} = parse_conditions(Arg, {Values, [], Count}),
+  CountSeq = lists:seq(NewCount, NewCount + length(ValueList) - 1),
   QMarks = [{'?', C} || C <- CountSeq],
   {
-    lists:append(Value, Values),
-    [{Name, xdb_query:validate_operator('in'), QMarks} | CleanExprs],
+    lists:reverse(ValueList) ++ NewValues,
+    [{NewExprs, xdb_query:validate_operator('in'), QMarks} | CleanExprs],
     lists:last(CountSeq) + 1
   };
-parse_conditions({Name, Op, Value}, {Values, CleanExprs, Count}) when not is_atom(Value) ->
+
+parse_conditions({sql_fun, Op}, {Values, CleanExprs, Count}) when is_atom(Op) ->
+  {Values, [{sql_fun, Op} | CleanExprs], Count};
+parse_conditions({sql_fun, Op, Args}, {Values, CleanExprs, Count})
+  when is_atom(Op) andalso is_list(Args) ->
+  {NewValues, NewExprs, NewCount} = parse_conditions(Args, {Values, [], Count}),
   {
-    [Value | Values],
-    [{Name, xdb_query:validate_operator(Op), {'?', Count}} | CleanExprs],
-    Count + 1
+    NewValues,
+    [{sql_fun, Op, lists:reverse(NewExprs)} | CleanExprs],
+    NewCount
   };
-parse_conditions({Name1, Op, Name2}, {Values, CleanExprs, Count}) when is_atom(Name2) ->
+
+%% TODO add support for complex intervals
+parse_conditions({interval, Arg, Unit}, {Values, CleanExprs, Count}) when is_atom(Unit) ->
+  {NewValues, NewExprs, NewCount} = parse_conditions(Arg, {Values, [], Count}),
   {
-    Values,
-    [{Name1, xdb_query:validate_operator(Op), Name2} | CleanExprs],
-    Count
+    NewValues,
+    [{interval, NewExprs, Unit} | CleanExprs],
+    NewCount
   };
-parse_conditions({Name, Value}, {Values, CleanExprs, Count}) when ?null_value(Value) ->
+
+%% special case for date & datetime to not confuse with equality
+parse_conditions({{_,_,_}, {_,_,_}} = Date, {Values, CleanExprs, Count}) ->
+  {[Date | Values], [{'?', Count} | CleanExprs], Count+1};
+
+parse_conditions({Y,M,D} = Date, {Values, CleanExprs, Count})
+  when is_integer(Y) andalso is_integer(M) andalso is_integer(D) ->
+  {[Date | Values], [{'?', Count} | CleanExprs], Count+1};
+
+parse_conditions({Arg1, Op, Arg2}, {Values, CleanExprs, Count}) ->
+  {Values1, Expr1, Count1} = parse_conditions(Arg1, {Values, [], Count}),
+  {Values2, Expr2, Count2} = parse_conditions(Arg2, {Values1, [], Count1}),
+
   {
-    [Value | Values],
-    [{Name, {'?', Count}} | CleanExprs],
-    Count + 1
+    Values2,
+    [{lists:reverse(Expr1), xdb_query:validate_operator(Op), lists:reverse(Expr2)} | CleanExprs],
+    Count2
   };
-parse_conditions({Name, Value}, {Values, CleanExprs, Count}) ->
+
+parse_conditions({Arg, Value}, {Values, CleanExprs, Count}) when ?null_check(Value) ->
+  {NewValues, NewExprs, NewCount} = parse_conditions(Arg, {Values, [], Count}),
   {
-    Values,
-    [{Name, Value} | CleanExprs],
-    Count
+    NewValues,
+    [{lists:reverse(NewExprs), Value} | CleanExprs],
+    NewCount
   };
+
+parse_conditions({Arg, Value}, State) ->
+  parse_conditions({Arg, '==', Value}, State);
+
+parse_conditions(Item, {Values, CleanExprs, Count}) when is_atom(Item) ->
+  {Values, [Item | CleanExprs], Count};
+
+parse_conditions(Value, {Values, CleanExprs, Count}) ->
+  {[Value | Values], [{'?', Count} | CleanExprs], Count + 1};
+
 parse_conditions([], Acc) ->
   Acc;
 parse_conditions(Expr, _) ->
@@ -279,6 +319,8 @@ where_clause(Exprs, EscapeFun) ->
 -spec where_clause(xdb_query:conditions(), fun(), fun()) -> iodata().
 where_clause([], _EscapeFun, _SlotFun) ->
   [];
+where_clause([Expr], EscapeFun, SlotFun) ->
+  where_clause(Expr, EscapeFun, SlotFun);
 where_clause(Exprs, EscapeFun, SlotFun) when is_list(Exprs) ->
   Clauses = [where_clause(Expr, EscapeFun, SlotFun) || Expr <- Exprs],
   ["(", interpose(" AND ", Clauses), ")"];
@@ -289,19 +331,32 @@ where_clause({'or', Exprs}, EscapeFun, SlotFun) ->
   ["(", interpose(" OR ", Clauses), ")"];
 where_clause({'not', Expr}, EscapeFun, SlotFun) ->
   [" NOT ", "(", where_clause(Expr, EscapeFun, SlotFun), ")"];
-where_clause({Name, 'in', Slot}, EscapeFun, SlotFun) when is_list(Slot) ->
-  Slots = lists:join(",", [SlotFun(S) || S <- Slot]),
-  [EscapeFun(Name), " ", operator_to_string('in'), "(", Slots, ")"];
-where_clause({Name, Op, {'?', _} = Slot}, EscapeFun, SlotFun) ->
-  [EscapeFun(Name), " ", operator_to_string(Op), SlotFun(Slot)];
-where_clause({Name1, Op, Name2}, EscapeFun, _SlotFun) ->
-  [EscapeFun(Name1), " ", operator_to_string(Op), " ", escape(Name2)];
-where_clause({Name,  {'?', _} = Slot}, EscapeFun, SlotFun) ->
-  [EscapeFun(Name), " = ", SlotFun(Slot)];
-where_clause({Name, 'null'}, EscapeFun, _SlotFun) ->
-  [EscapeFun(Name), " IS NULL "];
-where_clause({Name, 'not_null'}, EscapeFun, _SlotFun) ->
-  [EscapeFun(Name), " IS NOT NULL "].
+where_clause({'sql_fun', Fun}, _EscapeFun, _SlotFun) ->
+  [atom_to_list(Fun), "()"];
+where_clause({'sql_fun', Fun, Exprs}, EscapeFun, SlotFun) when is_list(Exprs) ->
+  Slots1 = [where_clause(Expr, EscapeFun, SlotFun) || Expr <- Exprs],
+  Slots = lists:join(", ", Slots1),
+  [atom_to_list(Fun), "(", Slots, ")"];
+where_clause({Expr, 'in', Items}, EscapeFun, SlotFun) when is_list(Items) ->
+  Slots = lists:join(", ", [SlotFun(I) || I <- Items]),
+  [where_clause(Expr, EscapeFun, SlotFun), " ", operator_to_string('in'), " (", Slots, ")"];
+
+where_clause({interval, Expr, Unit}, EscapeFun, SlotFun) ->
+  ["INTERVAL ", where_clause(Expr, EscapeFun, SlotFun), " ", atom_to_list(Unit)];
+
+where_clause({Arg1, Op, Arg2}, EscapeFun, SlotFun) ->
+  [where_clause(Arg1, EscapeFun, SlotFun),
+    " ", operator_to_string(Op), " ",
+    where_clause(Arg2, EscapeFun, SlotFun)];
+where_clause({Expr, 'null'}, EscapeFun, SlotFun) ->
+  [where_clause(Expr, EscapeFun, SlotFun), " IS NULL "];
+where_clause({Expr, 'not_null'}, EscapeFun, SlotFun) ->
+  [where_clause(Expr, EscapeFun, SlotFun), " IS NOT NULL "];
+where_clause(Name, EscapeFun, _SlotFun) when is_atom(Name) ->
+  EscapeFun(Name);
+
+where_clause({'?', _}, _EscapeFun, _SlotFun) ->
+  [" ? "].
 
 -spec order_by_clause([{atom(), xdb_query:sort()}]) -> iolist().
 order_by_clause(SortFields) ->
@@ -318,6 +373,8 @@ order_by_clause(SortFields, EscapeFun) ->
   [" ORDER BY ", interpose(", ", Clauses)].
 
 -spec escape(field()) -> string().
+escape(true) -> "1";
+escape(false) -> "0";
 escape(Field) when is_atom(Field) ->
   escape(atom_to_list(Field));
 escape(Field) when is_list(Field) ->
